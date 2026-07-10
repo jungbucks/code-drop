@@ -1,0 +1,47 @@
+<!DOCTYPE html><meta charset="utf-8">
+<iframe id="f" src="index.html" style="width:1200px;height:800px"></iframe>
+<pre id="out">PENDING</pre>
+<script>
+const out=[]; const log=m=>{out.push(m); document.getElementById('out').textContent=out.join('\n');};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+document.getElementById('f').onload=async()=>{
+ try{
+  const doc=document.getElementById('f').contentDocument;
+  const win=document.getElementById('f').contentWindow;
+  // ★ rAF 심: 가상시간에서도 게임 루프가 돌게 함
+  win.requestAnimationFrame = fn => win.setTimeout(()=>fn(win.performance.now()), 16);
+  const key=k=>doc.dispatchEvent(new win.KeyboardEvent('keydown',{key:k,bubbles:true}));
+  const alive=()=>[...doc.querySelectorAll('.block')].filter(x=>!x.classList.contains('dead')&&!x.classList.contains('floorhit'));
+  await sleep(300);
+  key('Enter'); await sleep(120); key('1'); await sleep(2700); // 비기너 시작
+  log('playing: '+doc.getElementById('screen-play').classList.contains('on'));
+  let b=alive()[0];
+  const y1=b.style.transform; await sleep(600); const y2=b.style.transform;
+  log('낙하(rAF 루프 동작): '+(y1!==y2));
+  // 처치 → 리스폰
+  const code=b.querySelector('.code').textContent;
+  for(const ch of code){ key(ch); await sleep(25); }
+  await sleep(1100); // 클램프 0.6s + 여유
+  log('처치 후 리스폰: '+(alive().length>=1));
+  // 8킬 → 레벨 2 + 진행 도트
+  let guard=0;
+  while(!doc.getElementById('hud-level').textContent.startsWith('LV 2') && guard<14){
+    const cur=alive()[0];
+    if(cur){ const c=cur.querySelector('.code').textContent;
+      for(const ch of c){ key(ch); await sleep(20); } }
+    await sleep(1000); guard++;
+  }
+  log('레벨업(8킬): '+doc.getElementById('hud-level').textContent.slice(0,20));
+  // 위험 경고 + 바닥 판정: 입력 중단하고 방치
+  const livesBefore=doc.getElementById('hud-lives').getAttribute('aria-label');
+  let dangerSeen=false;
+  for(let i=0;i<40;i++){ await sleep(600); if(doc.querySelector('.block.danger')) { dangerSeen=true; break; } }
+  log('위험 경고 표시: '+dangerSeen);
+  // 바닥 도달까지 대기
+  for(let i=0;i<50;i++){ await sleep(600);
+    if(doc.getElementById('hud-lives').getAttribute('aria-label')!==livesBefore) break; }
+  log('바닥 판정: '+livesBefore+' → '+doc.getElementById('hud-lives').getAttribute('aria-label'));
+  log('DONE');
+ }catch(e){ log('ERR '+e.message); }
+};
+</script>

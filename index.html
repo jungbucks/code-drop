@@ -95,6 +95,7 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
 .block .ch{color:var(--dim);}
 .block .ch.done{color:var(--ok);background:rgba(74,222,128,.16);border-radius:2px;font-weight:700;}
 .block .ch.cursor{box-shadow:inset 0 -3px 0 var(--target);}
+.block.danger{border-style:dashed;border-color:var(--warn);} /* v1.1: 바닥 임박 경고 — 색+점선 이중 표현(§8) */
 .block.miss{animation:shake .15s linear;}
 .block.dead{animation:pop .18s ease forwards;}
 .block.floorhit{animation:flash .16s ease forwards;}
@@ -311,7 +312,7 @@ const Audio2 = {
     g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
     o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+dur);
   },
-  key(){ this.beep(1000,0.01,"square"); },
+  key(combo){ this.beep(1000+Math.min(combo||0,12)*45,0.01,"square"); }, /* v1.1: 콤보에 따라 타건음 피치 상승 — 입력 리듬 강화(§9) */
   kill(){ this.beep(660,0.06,"triangle"); this.beep(990,0.09,"triangle",990); },
   err(){ this.beep(220,0.06,"sawtooth"); },
   floor(){ this.beep(300,0.18,"sawtooth",90); },
@@ -477,7 +478,7 @@ const Input = {
     }
     const t=Game.target, expected=t.code[t.progress];
     if(ch===expected){
-      t.setProgress(t.progress+1); Game.hits++; Audio2.key();
+      t.setProgress(t.progress+1); Game.hits++; Audio2.key(Game.combo);
       if(t.progress===t.code.length) Game.killBlock(t);
       else Hud.update();
     } else {
@@ -511,6 +512,8 @@ function frame(now){
   Game.elapsed+=dt;
   for(const b of Game.blocks.slice()){
     b.y+=b.v*dt; b.updatePos();
+    // v1.1: 바닥 72% 지점부터 위험 경고 (타겟 중인 블록은 제외 — 신호 혼선 방지)
+    b.el.classList.toggle("danger", b.y+b.h>=Game.floorY*0.72 && Game.target!==b);
     if(b.y+b.h>=Game.floorY) Game.blockHitFloor(b);
   }
   Game.spawnTimer-=dt;
@@ -533,7 +536,11 @@ const Hud = {
     const cb=$("#hud-combo");
     if(Game.combo>0){ cb.classList.remove("hidden"); cb.textContent="×"+Game.combo; cb.style.fontSize=(15+Math.min(Math.floor(Game.combo/5),3)*2)+"px"; }
     else cb.classList.add("hidden");
-    $("#hud-level").textContent="LV "+Game.level;
+    // v1.1: 레벨 진행 도트 — 다음 레벨까지 남은 처치 수를 상시 표시
+    const prog=Game.kills%CONFIG.levelUpKills;
+    const lvEl=$("#hud-level");
+    lvEl.textContent="LV "+Game.level+" "+"●".repeat(prog)+"○".repeat(CONFIG.levelUpKills-prog);
+    lvEl.setAttribute("aria-label","레벨 "+Game.level+", 다음 레벨까지 "+(CONFIG.levelUpKills-prog)+"개");
   },
   ime(warn){
     const el=$("#hud-ime"), banner=$("#ime-banner");

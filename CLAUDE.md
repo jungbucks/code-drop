@@ -20,7 +20,7 @@
 
 - 헤드리스 iframe 프로브 (TECH_SPEC §8 시나리오 15종 기준): probe.html로 index.html을 감싸 keydown 디스패치 →
   `msedge --headless=new --allow-file-access-from-files --virtual-time-budget=20000 --dump-dom`.
-- ⚠️ 헤드리스 가상시간에서는 **rAF가 돌지 않음** — 낙하·스폰 타이머 검증은 불가(타이핑·판정·점수만 가능). 낙하 계열은 실브라우저 확인을 사용자에게 요청.
+- ⚠️ ~~rAF 정지 한계~~ → **해결(2026-07-10)**: `probe.html`이 iframe에 rAF를 setTimeout(16ms) 심으로 교체해 낙하·스폰·레벨업·위험경고·바닥판정까지 자동 검증한다. 패치 후 반드시 probe.html 실행.
 
 ## 형제 프로젝트
 
