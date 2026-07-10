@@ -82,6 +82,7 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
 .gutter{position:absolute;top:0;left:0;width:40px;height:100%;font-family:var(--code-font);font-size:12px;color:#33445f;text-align:right;padding:6px 6px 0 0;user-select:none;line-height:1.9;}
 .floor-line{position:absolute;left:0;right:0;bottom:0;height:4px;background:repeating-linear-gradient(90deg,var(--bad),var(--bad) 10px,transparent 10px,transparent 20px);opacity:.7;}
 #ime-banner{position:absolute;left:50%;top:16px;transform:translateX(-50%);background:#3b2f14;color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:8px 18px;font-weight:700;font-size:15px;z-index:8;}
+#hint-target{position:absolute;left:50%;top:58px;transform:translateX(-50%);background:#12263f;color:var(--target);border:1px solid var(--target);border-radius:10px;padding:8px 18px;font-weight:700;font-size:15px;z-index:8;} /* v1.2 첫 판 온보딩 */
 
 /* 블록 */
 .block{position:absolute;top:0;left:12px;background:var(--panel);border:2px solid #3b4a63;border-radius:12px;padding:8px 14px;
@@ -119,6 +120,10 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
 .result-weak{background:#16233c;border-radius:10px;padding:12px 16px;text-align:left;font-size:14px;margin:12px 0;color:var(--dim);}
 .result-weak b{color:var(--ink);}
 .result-weak code{color:var(--bad);font-family:var(--code-font);}
+/* v1.2 성장 비교 (직전 판 대비) */
+.result-growth{background:#16233c;border-radius:10px;padding:10px 16px;text-align:left;font-size:14px;margin:12px 0 0;color:var(--dim);}
+.result-growth .up{color:var(--ok);font-weight:700;}
+.result-growth .dn{color:var(--bad);font-weight:700;}
 .newrec{color:var(--warn);font-weight:800;}
 .idrow{display:flex;gap:10px;justify-content:center;margin:14px 0;flex-wrap:wrap;}
 .idrow label{color:var(--dim);font-size:14px;}
@@ -203,6 +208,7 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
       <div class="floor-line"></div>
     </div>
     <div id="ime-banner" class="hidden">⚠ 한/영 키를 눌러 영문으로 전환하세요!</div>
+    <div id="hint-target" class="hidden">💡 블록의 <b>첫 글자</b>를 치면 그 블록이 잠겨요 — 그다음부터 이어서 치면 됩니다!</div>
   </section>
 
   <!-- PAUSE -->
@@ -226,7 +232,9 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
       </div>
       <div class="result-stats" id="res-stats"></div>
       <div class="result-weak" id="res-weak"></div>
+      <div class="result-growth hidden" id="res-growth"></div>
       <div class="result-btns">
+        <button id="btn-nextdiff" class="btn primary hidden">다음 단계 도전 →</button>
         <button id="btn-copy" class="btn primary">📋 결과 요약 복사 (제출용)</button>
         <button id="btn-retry" class="btn ghost">다시 하기 <kbd>R</kbd></button>
         <button id="btn-rediff" class="btn ghost">난이도 바꾸기</button>
@@ -428,7 +436,16 @@ const Game = {
     const ft=CONFIG.fallTime(this.diff, this.level);
     this.blocks.push(new Block(snip, lane, ft, this.fieldH));
   },
-  setTarget(b){ if(this.target) this.target.setTarget(false); this.target=b; if(b) b.setTarget(true); },
+  setTarget(b){
+    if(this.target) this.target.setTarget(false);
+    this.target=b;
+    if(b){
+      b.setTarget(true);
+      // v1.2 온보딩: 첫 타겟 잠금에 성공하면 힌트 종료(영구)
+      const h=$("#hint-target");
+      if(!h.classList.contains("hidden")){ h.classList.add("hidden"); Storage.set("codedrop_seen",1); }
+    }
+  },
   comboBreak(){ this.combo=0; },
 
   killBlock(b){
@@ -585,6 +602,35 @@ const Result = {
     }
     $("#res-weak").innerHTML=weak;
 
+    // v1.2 성장 비교 — "직전 판"과 비교 (최고 기록과 별개)
+    const lastAll=Storage.get("codedrop_last")||{};
+    const prevRun=lastAll[Game.diff.key];
+    const growth=$("#res-growth");
+    if(prevRun){
+      const fmt=(v,suffix)=> v>0 ? '<span class="up">▲ +'+v+suffix+'</span>'
+                    : v<0 ? '<span class="dn">▼ '+v+suffix+'</span>' : '= 0'+suffix;
+      growth.innerHTML="📈 <b style='color:var(--ink)'>지난 판 대비</b> — 점수 "+fmt(Game.score-prevRun.score,"")+
+        " · CPM "+fmt(cpm-prevRun.cpm,"")+
+        " · 정확도 "+fmt(+(acc-prevRun.acc).toFixed(1),"%p")+
+        " · 최대 콤보 "+fmt(Game.maxCombo-prevRun.maxCombo,"");
+    } else {
+      growth.innerHTML="📈 이 난이도의 <b style='color:var(--ink)'>첫 기록!</b> 다음 판부터 지난 판과의 성장 비교가 표시됩니다.";
+    }
+    growth.classList.remove("hidden");
+    lastAll[Game.diff.key]={score:Game.score,acc:+acc.toFixed(1),cpm,maxCombo:Game.maxCombo,date:this.today()};
+    Storage.set("codedrop_last",lastAll);
+
+    // v1.2 완주 시 다음 난이도 도전 버튼 (성장 사다리)
+    const ORDER=["beginner","easy","normal","hard"];
+    const nb=$("#btn-nextdiff");
+    const ni=ORDER.indexOf(Game.diff.key);
+    if(Game.completed && ni>-1 && ni<ORDER.length-1){
+      const nk=ORDER[ni+1];
+      nb.textContent="다음 단계: "+CONFIG.diffs[nk].label+" 도전 →";
+      nb.dataset.k=nk;
+      nb.classList.remove("hidden");
+    } else nb.classList.add("hidden");
+
     // 최고 기록
     const best=Storage.get("codedrop_best")||{};
     const prev=best[Game.diff.key];
@@ -661,6 +707,8 @@ function startCountdown(diffKey){
 }
 function startPlaying(){
   Screen.show("play"); Hud.ime(false); Hud.update();
+  // v1.2 온보딩: 처음 플레이하는 사용자에게만 타겟팅 힌트
+  $("#hint-target").classList.toggle("hidden", !!Storage.get("codedrop_seen"));
   Game.begin();
   lastTime=performance.now();
   if(!rafId) rafId=requestAnimationFrame(frame);
@@ -746,6 +794,7 @@ function init(){
   $("#btn-resume").onclick=togglePause;
   $("#btn-quit").onclick=quitToTitle;
   $("#btn-copy").onclick=function(){ Result.copy(this); };
+  $("#btn-nextdiff").onclick=function(){ startCountdown(this.dataset.k); };
   $("#btn-retry").onclick=()=>startCountdown(Game.diff.key);
   $("#btn-rediff").onclick=()=>Screen.show("diff");
   $("#btn-home").onclick=()=>Screen.show("title");

@@ -15,12 +15,15 @@ document.getElementById('f').onload=async()=>{
   await sleep(300);
   key('Enter'); await sleep(120); key('1'); await sleep(2700); // 비기너 시작
   log('playing: '+doc.getElementById('screen-play').classList.contains('on'));
+  // v1.2 온보딩 힌트: 첫 플레이에 보이고, 첫 타겟 잠금에 사라짐
+  log('온보딩 힌트 표시: '+!doc.getElementById('hint-target').classList.contains('hidden'));
   let b=alive()[0];
   const y1=b.style.transform; await sleep(600); const y2=b.style.transform;
   log('낙하(rAF 루프 동작): '+(y1!==y2));
   // 처치 → 리스폰
   const code=b.querySelector('.code').textContent;
   for(const ch of code){ key(ch); await sleep(25); }
+  log('온보딩 힌트 종료: '+doc.getElementById('hint-target').classList.contains('hidden'));
   await sleep(1100); // 클램프 0.6s + 여유
   log('처치 후 리스폰: '+(alive().length>=1));
   // 8킬 → 레벨 2 + 진행 도트
@@ -41,6 +44,17 @@ document.getElementById('f').onload=async()=>{
   for(let i=0;i<50;i++){ await sleep(600);
     if(doc.getElementById('hud-lives').getAttribute('aria-label')!==livesBefore) break; }
   log('바닥 판정: '+livesBefore+' → '+doc.getElementById('hud-lives').getAttribute('aria-label'));
+  // ── v1.2: 게임 오버까지 방치 → 결과 화면의 성장 비교(첫 기록) + 재도전 후 (지난 판 대비) 확인
+  for(let i=0;i<200;i++){ await sleep(1000);
+    if(doc.getElementById('screen-result').classList.contains('on')) break; }
+  const g1=doc.getElementById('res-growth').textContent;
+  log('결과1 성장줄: '+(g1.includes('첫 기록')?'첫 기록 ✓':g1.slice(0,30)));
+  log('완주 아님 → 다음 난이도 버튼 숨김: '+doc.getElementById('btn-nextdiff').classList.contains('hidden'));
+  key('r'); await sleep(2900); // 같은 난이도 재시작
+  for(let i=0;i<200;i++){ await sleep(1000);
+    if(doc.getElementById('screen-result').classList.contains('on')) break; }
+  const g2=doc.getElementById('res-growth').textContent;
+  log('결과2 성장줄: '+(g2.includes('지난 판 대비')?'지난 판 대비 ✓':g2.slice(0,30)));
   log('DONE');
  }catch(e){ log('ERR '+e.message); }
 };

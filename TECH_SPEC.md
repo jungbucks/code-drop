@@ -80,6 +80,9 @@ code-drop/
   "normal": { ... }, "hard": { ... } }
 // key: "codedrop_settings"
 { "sound": true, "fontSize": 2, "hardcore": false }   // fontSize: 1|2|3 = 16|19|22px
+// key: "codedrop_last" (v1.2) — 난이도별 <직전 판> 기록 (성장 비교용, best와 별개)
+{ "easy": { "score": 9120, "acc": 91.0, "cpm": 160, "maxCombo": 9, "date": "2026-07-11" }, ... }
+// key: "codedrop_seen" (v1.2) — 온보딩 힌트 1회 노출 플래그 (1)
 ```
 
 ## 6. 팔레트·타이포 (대비 검증값 — 이 값 그대로 사용)
