@@ -1,0 +1,27 @@
+# 코드 낙하 (Code Drop) — 유지보수 플레이북 (후임 모델용 진입점)
+
+> Python 타이핑 아케이드 게임 (교실 오프라인용, 정글 연계). **규칙·수치의 원본은 `GAME_DESIGN.md` + `TECH_SPEC.md`** — 이 두 문서에 없는 규칙을 발명하지 말 것. 충돌 시 GAME_DESIGN이 우선.
+
+## 구조 (2파일 배포)
+
+- `index.html` — 게임 전체(단일 파일). `snippets.js` — 문항 데이터(교사 수정 지점, 스키마는 파일 상단 주석).
+- 배포 = 폴더째 복사(오프라인 더블클릭). git 저장소는 2026-07-10 초기화(로컬 이력용, 원격 없음).
+
+## 절대 규칙 (TECH_SPEC §1 요약 + 세션 확정 사항)
+
+1. 프레임워크·빌드·웹폰트·CDN·canvas 금지. 블록은 DOM.
+2. GAME_DESIGN의 수치(난이도 표·점수식·등급표)는 CONFIG 상수로만 — 변경은 사용자 지시 + 두 문서 동기 갱신 필수.
+3. PLAYING 중 일시정지는 **ESC 전용** ('p'는 코드 글자 — 2026-07-09 확정 편차, TECH_SPEC §4).
+4. 학번·이름은 localStorage 저장 금지(세션만). 기록은 이름 없이.
+5. 난이도 4종(2026-07-10 비기너 추가): 숫자키 1=비기너 2=초급 3=중급 4=고급. 스니펫 level 0~3.
+6. 페이싱(2026-07-10): spawnFactor 0.6 + 화면에 블록 0개면 스폰 대기 0.6초 클램프(`CONFIG.emptyRespawn`).
+
+## 검증
+
+- 헤드리스 iframe 프로브 (TECH_SPEC §8 시나리오 15종 기준): probe.html로 index.html을 감싸 keydown 디스패치 →
+  `msedge --headless=new --allow-file-access-from-files --virtual-time-budget=20000 --dump-dom`.
+- ⚠️ 헤드리스 가상시간에서는 **rAF가 돌지 않음** — 낙하·스폰 타이머 검증은 불가(타이핑·판정·점수만 가능). 낙하 계열은 실브라우저 확인을 사용자에게 요청.
+
+## 형제 프로젝트
+
+정글(jgle.kr)의 CLAUDE.md가 전체 지도. 이 게임의 디자인 톤은 GAME_DESIGN §9(이펙트 절제) — 파티클·화면 흔들림·BGM 금지 유지.

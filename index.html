@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>코드 낙하 — 파이썬 타이핑 게임</title>
+<style>
+/* ===== 팔레트 (TECH_SPEC §6 — 검증값 그대로) ===== */
+:root{
+  --bg:#0F172A; --panel:#1E293B; --ink:#E2E8F0; --dim:#94A3B8;
+  --ok:#4ADE80; --bad:#F87171; --target:#60A5FA; --warn:#FBBF24;
+  --code-fs:19px;
+  --code-font:"D2Coding","Cascadia Code",Consolas,"Courier New",monospace;
+  --ui-font:"Malgun Gothic",-apple-system,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--ui-font);
+  overflow:hidden; -webkit-font-smoothing:antialiased;
+}
+#app{position:relative; width:100%; height:100vh; height:100dvh;}
+.screen{position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; padding:20px;}
+.screen.on{display:flex;}
+kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7px;font-family:var(--code-font);font-size:.85em;color:var(--ink);}
+.btn{font-family:var(--ui-font);font-size:17px;font-weight:700;padding:12px 26px;border-radius:10px;border:2px solid transparent;cursor:pointer;transition:filter .12s,transform .08s;}
+.btn:active{transform:translateY(1px);}
+.btn.primary{background:var(--target);color:#04122e;}
+.btn.primary:hover{filter:brightness(1.08);}
+.btn.ghost{background:transparent;color:var(--ink);border-color:#475569;}
+.btn.ghost:hover{background:#26344b;}
+/* 포커스 링 (§7 대비 3:1↑) */
+:focus-visible{outline:3px solid var(--target);outline-offset:2px;}
+.badge{display:inline-block;background:#3b2f14;color:var(--warn);border:1px solid var(--warn);border-radius:20px;padding:4px 14px;font-size:13px;font-weight:700;}
+.hidden{display:none !important;}
+
+/* ===== TITLE ===== */
+.title-card{text-align:center;max-width:520px;}
+.title-card h1{font-family:var(--code-font);font-size:clamp(38px,8vw,58px);margin:0 0 6px;letter-spacing:-.02em;}
+.title-card h1 .cursor-blink{color:var(--ok);animation:blink 1.1s step-end infinite;}
+@keyframes blink{50%{opacity:0;}}
+.subtitle{color:var(--dim);font-size:16px;margin:0 0 28px;}
+.title-opts{margin-top:26px;display:flex;flex-direction:column;gap:14px;align-items:center;}
+.fontsize-opt{color:var(--dim);font-size:14px;display:flex;gap:8px;align-items:center;}
+.fontsize-opt button{background:var(--panel);color:var(--ink);border:1px solid #475569;border-radius:8px;padding:6px 12px;cursor:pointer;font-family:var(--ui-font);}
+.fontsize-opt button.on{border-color:var(--target);color:var(--target);font-weight:700;}
+.hint-keys{color:var(--dim);font-size:13px;margin-top:22px;}
+
+/* ===== DIFFICULTY ===== */
+#screen-diff h2{font-size:26px;margin:0 0 22px;}
+.diff-grid{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;max-width:1000px;}
+.diff-card{background:var(--panel);border:2px solid #334155;border-radius:16px;padding:22px 24px;width:220px;text-align:left;cursor:pointer;color:var(--ink);font-family:var(--ui-font);transition:border-color .12s,transform .08s;}
+.diff-card:hover{border-color:var(--target);transform:translateY(-3px);}
+.diff-card .dk{font-size:22px;font-weight:800;margin-bottom:4px;}
+.diff-card .dk .num{color:var(--target);font-family:var(--code-font);margin-right:8px;}
+.diff-card .dd{color:var(--dim);font-size:13px;line-height:1.6;}
+.hardcore{margin-top:22px;display:flex;align-items:center;gap:10px;color:var(--dim);font-size:15px;cursor:pointer;}
+.hardcore input{width:18px;height:18px;accent-color:var(--bad);cursor:pointer;}
+#btn-diff-back{margin-top:22px;}
+
+/* ===== COUNTDOWN ===== */
+#count-num{font-family:var(--code-font);font-size:120px;font-weight:800;color:var(--target);line-height:1;}
+#count-preview{margin-top:22px;font-family:var(--code-font);font-size:var(--code-fs);background:var(--panel);border:1px dashed #475569;border-radius:10px;padding:10px 18px;color:var(--dim);}
+#count-preview::before{content:"곧 등장: ";color:#64748b;font-family:var(--ui-font);font-size:13px;}
+
+/* ===== PLAYING ===== */
+#screen-play{padding:0;justify-content:flex-start;}
+#hud{width:100%;display:flex;align-items:center;gap:20px;padding:10px 18px;background:var(--panel);border-bottom:1px solid #334155;font-size:15px;flex-wrap:wrap;z-index:5;}
+#hud .lives{font-size:20px;letter-spacing:2px;}
+#hud .lives .full{color:var(--bad);}
+#hud .lives .empty{color:#475569;}
+#hud .score{font-family:var(--code-font);font-size:18px;}
+#hud .score b{transition:none;}
+#hud .combo{background:#1e3a5f;color:var(--target);border:1px solid var(--target);border-radius:8px;padding:2px 10px;font-weight:800;font-family:var(--code-font);}
+#hud .level{color:var(--dim);font-weight:700;}
+#hud .ime{margin-left:auto;font-family:var(--code-font);font-size:13px;padding:3px 9px;border-radius:6px;}
+#hud .ime.ok{color:var(--ok);border:1px solid var(--ok);}
+#hud .ime.warn{color:var(--warn);border:1px solid var(--warn);background:#3b2f14;}
+#btn-pause{background:transparent;border:1px solid #475569;color:var(--ink);border-radius:8px;width:34px;height:30px;cursor:pointer;font-size:14px;}
+#playfield{position:relative;width:100%;flex:1;overflow:hidden;background:
+  repeating-linear-gradient(90deg,transparent,transparent 39px,#16233c 39px,#16233c 40px) 0 0/40px 100% no-repeat;}
+.gutter{position:absolute;top:0;left:0;width:40px;height:100%;font-family:var(--code-font);font-size:12px;color:#33445f;text-align:right;padding:6px 6px 0 0;user-select:none;line-height:1.9;}
+.floor-line{position:absolute;left:0;right:0;bottom:0;height:4px;background:repeating-linear-gradient(90deg,var(--bad),var(--bad) 10px,transparent 10px,transparent 20px);opacity:.7;}
+#ime-banner{position:absolute;left:50%;top:16px;transform:translateX(-50%);background:#3b2f14;color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:8px 18px;font-weight:700;font-size:15px;z-index:8;}
+
+/* 블록 */
+.block{position:absolute;top:0;left:12px;background:var(--panel);border:2px solid #3b4a63;border-radius:12px;padding:8px 14px;
+  font-family:var(--code-font);font-size:var(--code-fs);white-space:pre;box-shadow:0 4px 12px rgba(0,0,0,.35);will-change:transform;}
+.block.lane-center{left:50%;}
+.block.lane-right{left:auto;right:12px;}
+.block .tmark{color:var(--target);font-weight:800;margin-right:8px;visibility:hidden;}
+.block.target{border-color:var(--target);box-shadow:0 0 0 2px var(--target),0 4px 12px rgba(0,0,0,.35);}
+.block.target .tmark{visibility:visible;}
+.block .code{color:var(--ink);}
+.block .ch{color:var(--dim);}
+.block .ch.done{color:var(--ok);background:rgba(74,222,128,.16);border-radius:2px;font-weight:700;}
+.block .ch.cursor{box-shadow:inset 0 -3px 0 var(--target);}
+.block.miss{animation:shake .15s linear;}
+.block.dead{animation:pop .18s ease forwards;}
+.block.floorhit{animation:flash .16s ease forwards;}
+.xmark{position:absolute;color:var(--bad);font-weight:800;font-size:calc(var(--code-fs) + 4px);pointer-events:none;animation:xfade .3s ease forwards;z-index:9;}
+@keyframes shake{0%,100%{transform:translateY(var(--yy)) translateX(0);}25%{transform:translateY(var(--yy)) translateX(-2px);}75%{transform:translateY(var(--yy)) translateX(2px);}}
+@keyframes pop{to{opacity:0;transform:translateY(var(--yy)) scale(.7);}}
+@keyframes flash{0%{border-color:var(--bad);background:#4a2020;}100%{opacity:0;}}
+@keyframes xfade{0%{opacity:1;transform:scale(1);}100%{opacity:0;transform:scale(1.4);}}
+
+/* ===== PAUSE / RESULT ===== */
+.overlay{position:absolute;inset:0;background:rgba(15,23,42,.86);display:flex;align-items:center;justify-content:center;z-index:20;}
+.overlay-card,.result-card{background:var(--panel);border:1px solid #334155;border-radius:18px;padding:30px 36px;text-align:center;max-width:560px;width:92%;}
+.overlay-card h2{margin:0 0 20px;}
+.overlay-card .btn{margin:6px;}
+.result-card h2{margin:0 0 4px;font-size:24px;}
+.result-grade{font-family:var(--code-font);font-size:76px;font-weight:800;line-height:1;margin:10px 0;}
+.grade-S{color:var(--warn);} .grade-A{color:var(--ok);} .grade-B{color:var(--target);} .grade-C{color:var(--ink);} .grade-D{color:var(--dim);}
+.result-complete{color:var(--ok);font-weight:800;margin-bottom:8px;}
+.result-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;text-align:left;margin:16px 0;font-size:15px;}
+.result-stats .k{color:var(--dim);} .result-stats .v{font-family:var(--code-font);text-align:right;}
+.result-weak{background:#16233c;border-radius:10px;padding:12px 16px;text-align:left;font-size:14px;margin:12px 0;color:var(--dim);}
+.result-weak b{color:var(--ink);}
+.result-weak code{color:var(--bad);font-family:var(--code-font);}
+.newrec{color:var(--warn);font-weight:800;}
+.idrow{display:flex;gap:10px;justify-content:center;margin:14px 0;flex-wrap:wrap;}
+.idrow label{color:var(--dim);font-size:14px;}
+.idrow input{background:var(--bg);border:1px solid #475569;color:var(--ink);border-radius:8px;padding:8px 10px;font-family:var(--code-font);width:120px;}
+.result-btns{margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+
+/* ===== 모션 배려 ===== */
+@media (prefers-reduced-motion: reduce){
+  .block.miss{animation:none;outline:2px solid var(--bad);}
+  .block.dead{animation:none;opacity:0;}
+  .block.floorhit{animation:none;opacity:0;}
+  .xmark{animation:none;}
+  .title-card h1 .cursor-blink{animation:none;}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- TITLE -->
+  <section id="screen-title" class="screen on">
+    <div class="title-card">
+      <h1>코드 낙하<span class="cursor-blink">_</span></h1>
+      <p class="subtitle">떨어지는 파이썬 코드를 정확히 타이핑해서 없애자</p>
+      <button id="btn-start" class="btn primary" data-autofocus>시작하기 <kbd>Enter</kbd></button>
+      <div class="title-opts">
+        <button id="btn-sound" class="btn ghost" aria-pressed="true">🔊 소리 켜짐</button>
+        <div class="fontsize-opt">코드 글자 크기
+          <button data-fs="1">작게</button>
+          <button data-fs="2" class="on">보통</button>
+          <button data-fs="3">크게</button>
+        </div>
+      </div>
+      <p id="fallback-badge" class="badge hidden">기본 문제 15개로 실행 중 (snippets.js 없음)</p>
+      <p class="hint-keys">타이핑: 물리 키보드 · 일시정지: <kbd>Esc</kbd> · 오타는 무시되니 정타만 치면 됩니다</p>
+    </div>
+  </section>
+
+  <!-- DIFFICULTY -->
+  <section id="screen-diff" class="screen">
+    <h2>난이도 선택</h2>
+    <div class="diff-grid">
+      <button class="diff-card" data-diff="beginner" data-autofocus>
+        <div class="dk"><span class="num">1</span>비기너</div>
+        <div class="dd">파이썬 낱말 (print, for…)<br>낙하 20초 · 기호 없음<br>영타가 처음이라면 여기부터</div>
+      </button>
+      <button class="diff-card" data-diff="easy">
+        <div class="dk"><span class="num">2</span>초급</div>
+        <div class="dd">출력·변수·연산<br>낙하 16초 · 무압박<br>코드 한 줄 입문</div>
+      </button>
+      <button class="diff-card" data-diff="normal">
+        <div class="dk"><span class="num">3</span>중급</div>
+        <div class="dd">제어문·입력·리스트<br>낙하 12초<br>기본 실력 다지기</div>
+      </button>
+      <button class="diff-card" data-diff="hard">
+        <div class="dk"><span class="num">4</span>고급</div>
+        <div class="dd">함수·자료구조·모듈<br>낙하 9초 · 생명 4<br>상위권 도전</div>
+      </button>
+    </div>
+    <label class="hardcore"><input type="checkbox" id="chk-hardcore"> 하드코어 <kbd>H</kbd> — 오타 나면 그 줄을 처음부터 다시</label>
+    <button id="btn-diff-back" class="btn ghost">← 처음으로 <kbd>Esc</kbd></button>
+  </section>
+
+  <!-- COUNTDOWN -->
+  <section id="screen-count" class="screen">
+    <div id="count-num">3</div>
+    <div id="count-preview">print("hello")</div>
+  </section>
+
+  <!-- PLAYING -->
+  <section id="screen-play" class="screen">
+    <div id="hud">
+      <span class="lives" id="hud-lives" aria-label="생명 5개"></span>
+      <span class="score">점수 <b id="hud-score">0</b></span>
+      <span class="combo hidden" id="hud-combo">×0</span>
+      <span class="level" id="hud-level">LV 1</span>
+      <span class="ime ok" id="hud-ime">[영문 A]</span>
+      <button id="btn-pause" aria-label="일시정지">⏸</button>
+    </div>
+    <div id="playfield">
+      <div class="gutter" id="gutter" aria-hidden="true"></div>
+      <div class="floor-line"></div>
+    </div>
+    <div id="ime-banner" class="hidden">⚠ 한/영 키를 눌러 영문으로 전환하세요!</div>
+  </section>
+
+  <!-- PAUSE -->
+  <div id="pause-overlay" class="overlay hidden">
+    <div class="overlay-card">
+      <h2>일시정지</h2>
+      <button id="btn-resume" class="btn primary" data-autofocus>계속하기 <kbd>Esc</kbd></button>
+      <button id="btn-quit" class="btn ghost">그만하기</button>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <section id="screen-result" class="screen">
+    <div class="result-card" aria-live="polite">
+      <div class="result-complete hidden" id="res-complete">완주 🎉</div>
+      <h2 id="res-title">결과</h2>
+      <div class="result-grade" id="res-grade">A</div>
+      <div class="idrow">
+        <label>학번 <input type="text" id="res-id" maxlength="12" placeholder="10101"></label>
+        <label>이름 <input type="text" id="res-name" maxlength="10" placeholder="홍길동"></label>
+      </div>
+      <div class="result-stats" id="res-stats"></div>
+      <div class="result-weak" id="res-weak"></div>
+      <div class="result-btns">
+        <button id="btn-copy" class="btn primary">📋 결과 요약 복사 (제출용)</button>
+        <button id="btn-retry" class="btn ghost">다시 하기 <kbd>R</kbd></button>
+        <button id="btn-rediff" class="btn ghost">난이도 바꾸기</button>
+        <button id="btn-home" class="btn ghost">처음으로</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="snippets.js"></script>
+<script>
+"use strict";
+(function(){
+
+/* ===================== CONFIG (GAME_DESIGN §4 — 불변) ===================== */
+const CONFIG = {
+  diffs: {
+    beginner:{ key:"beginner", label:"비기너", mix:[[0,1.0]],     T0:20, Tmin:9,   startMax:1, life:5 },
+    easy:   { key:"easy",   label:"초급", mix:[[1,1.0]],         T0:16, Tmin:7,   startMax:1, life:5 },
+    normal: { key:"normal", label:"중급", mix:[[1,0.3],[2,0.7]], T0:12, Tmin:5.5, startMax:1, life:5 },
+    hard:   { key:"hard",   label:"고급", mix:[[2,0.3],[3,0.7]], T0:9,  Tmin:4,   startMax:2, life:4 },
+  },
+  levelUpKills:8, maxLevel:10, fallDecay:0.92, spawnFactor:0.6, minRespawnGap:5,
+  emptyRespawn:0.6, // 화면에 블록이 없으면 다음 스폰까지 최대 0.6초 (대기 공백 제거)
+  score:{ perChar:10, comboCoef:0.1, comboCap:10, noMiss:30 },
+  capAt(key, lv){
+    if(key==="beginner") return lv>=7 ? 2 : 1;
+    if(key==="easy")   return lv>=6 ? 2 : 1;
+    if(key==="normal") return lv>=8 ? 3 : (lv>=4 ? 2 : 1);
+    return lv>=5 ? 3 : 2; // hard
+  },
+  fallTime(diff, lv){ return Math.max(diff.Tmin, diff.T0 * Math.pow(this.fallDecay, lv-1)); },
+  spawnInterval(diff, lv){ return this.fallTime(diff,lv) * this.spawnFactor / this.capAt(diff.key, lv); },
+  gradeOf(acc, level, done){
+    if(acc>=97 && done) return "S";
+    if(acc>=93 && level>=7) return "A";
+    if(acc>=85 || level>=5) return "B";
+    if(level>=3) return "C";
+    return "D";
+  },
+};
+
+/* 내장 폴백 15개 (snippets.js 없을 때 — TECH_SPEC §2) */
+const FALLBACK = [
+  {id:"fb-b1",level:0,category:"builtin",code:'print'},
+  {id:"fb-b2",level:0,category:"builtin",code:'input'},
+  {id:"fb-b3",level:0,category:"keyword",code:'for'},
+  {id:"fb-b4",level:0,category:"keyword",code:'while'},
+  {id:"fb-b5",level:0,category:"keyword",code:'import'},
+  {id:"fb-01",level:1,category:"output",code:'print("hello")'},
+  {id:"fb-02",level:1,category:"variable",code:'x = 10'},
+  {id:"fb-03",level:1,category:"operator",code:'y = x + 5'},
+  {id:"fb-04",level:1,category:"output",code:'print(x)'},
+  {id:"fb-05",level:1,category:"operator",code:'a = 3 * 4'},
+  {id:"fb-06",level:1,category:"variable",code:'s = "python"'},
+  {id:"fb-07",level:1,category:"builtin",code:'print(len(s))'},
+  {id:"fb-08",level:2,category:"condition",code:'if x == 5:'},
+  {id:"fb-09",level:2,category:"loop",code:'for i in range(10):'},
+  {id:"fb-10",level:2,category:"list",code:'nums = [1, 2, 3]'},
+  {id:"fb-11",level:2,category:"input",code:'n = int(input())'},
+  {id:"fb-12",level:2,category:"builtin",code:'print(max(nums))'},
+  {id:"fb-13",level:3,category:"function",code:'def add(a, b):'},
+  {id:"fb-14",level:3,category:"dict",code:'d = {"a": 1}'},
+  {id:"fb-15",level:3,category:"module",code:'import random'},
+];
+
+/* ===================== Storage ===================== */
+const Storage = {
+  get(k){ try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){ return null; } },
+  set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+};
+
+/* ===================== Audio (WebAudio 신스 4음) ===================== */
+const Audio2 = {
+  ctx:null, muted:false,
+  ensure(){ if(!this.ctx){ try{ this.ctx = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } },
+  beep(freq, dur, type, glideTo){
+    if(this.muted || !this.ctx) return;
+    const t=this.ctx.currentTime, o=this.ctx.createOscillator(), g=this.ctx.createGain();
+    o.type=type||"square"; o.frequency.setValueAtTime(freq,t);
+    if(glideTo) o.frequency.linearRampToValueAtTime(glideTo, t+dur);
+    g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+dur);
+  },
+  key(){ this.beep(1000,0.01,"square"); },
+  kill(){ this.beep(660,0.06,"triangle"); this.beep(990,0.09,"triangle",990); },
+  err(){ this.beep(220,0.06,"sawtooth"); },
+  floor(){ this.beep(300,0.18,"sawtooth",90); },
+};
+
+/* ===================== 스니펫 로딩 + 검증 (TECH_SPEC §3) ===================== */
+function loadSnippets(){
+  let raw = window.CODE_DROP_SNIPPETS, usedFallback=false;
+  if(!Array.isArray(raw) || raw.length===0){ raw=FALLBACK; usedFallback=true; }
+  const seen=new Set(), valid=[];
+  for(const s of raw){
+    if(!s || typeof s.code!=="string"){ console.warn("스니펫 제외(형식):",s); continue; }
+    const c=s.code;
+    if(c.length<1 || c.length>34){ console.warn("스니펫 제외(길이):",c); continue; }
+    if(!/^[\x20-\x7E]+$/.test(c)){ console.warn("스니펫 제외(ASCII 아님):",c); continue; }
+    if(/^\s/.test(c)){ console.warn("스니펫 제외(선행 공백):",c); continue; }
+    if(![0,1,2,3].includes(s.level)){ console.warn("스니펫 제외(레벨):",c); continue; }
+    if(seen.has(s.id)){ console.warn("스니펫 제외(id 중복):",s.id); continue; }
+    seen.add(s.id);
+    valid.push({id:s.id, level:s.level, category:s.category||"output", code:c});
+  }
+  if(valid.length===0){ // 커스텀이 전부 걸러졌으면 폴백
+    for(const s of FALLBACK) valid.push(Object.assign({},s));
+    usedFallback=true;
+  }
+  return {snippets:valid, usedFallback};
+}
+
+/* ===================== 유틸 ===================== */
+function esc(ch){ return ch==="&"?"&amp;":ch==="<"?"&lt;":ch===">"?"&gt;":ch; }
+const $ = sel => document.querySelector(sel);
+
+/* ===================== Block ===================== */
+class Block {
+  constructor(snip, lane, fallTime, fieldH){
+    this.snip=snip; this.code=snip.code; this.progress=0; this.missed=false; this.lane=lane;
+    const el=document.createElement("div");
+    el.className="block lane-"+(lane===0?"left":lane===1?"center":"right");
+    const chars=[...this.code].map(c=>`<span class="ch">${esc(c)}</span>`).join("");
+    el.innerHTML=`<span class="tmark" aria-hidden="true">▶</span><span class="code">${chars}</span>`;
+    playfield.appendChild(el);
+    this.el=el; this.spans=el.querySelectorAll(".ch");
+    this.h=el.offsetHeight;
+    this.y=-this.h;
+    this.v=fieldH / fallTime;
+    this.setProgress(0); this.updatePos();
+  }
+  updatePos(){
+    this.el.style.setProperty("--yy", this.y+"px");
+    this.el.style.transform = this.lane===1 ? `translate(-50%, ${this.y}px)` : `translateY(${this.y}px)`;
+  }
+  setProgress(n){
+    this.progress=n;
+    this.spans.forEach((s,i)=>{ s.classList.toggle("done", i<n); s.classList.toggle("cursor", i===n); });
+  }
+  setTarget(on){ this.el.classList.toggle("target", on); }
+  shake(){ this.el.classList.remove("miss"); void this.el.offsetWidth; this.el.classList.add("miss"); }
+  destroy(){ this.el.remove(); }
+}
+
+/* ===================== Spawner ===================== */
+const Spawner = {
+  byLevel:{0:[],1:[],2:[],3:[]}, all:[], recent:[], lastLane:-1,
+  init(snips){
+    this.byLevel={0:[],1:[],2:[],3:[]}; this.all=snips.slice(); this.recent=[]; this.lastLane=-1;
+    for(const s of snips) this.byLevel[s.level].push(s);
+  },
+  draw(diff){
+    const r=Math.random(); let acc=0, lv=diff.mix[0][0];
+    for(const [l,w] of diff.mix){ acc+=w; if(r<=acc){ lv=l; break; } }
+    let pool=this.byLevel[lv]; if(!pool||!pool.length) pool=this.all;
+    let cand=pool.filter(s=>!this.recent.includes(s.id));
+    if(!cand.length) cand=pool;
+    const snip=cand[Math.floor(Math.random()*cand.length)];
+    this.recent.push(snip.id); if(this.recent.length>CONFIG.minRespawnGap) this.recent.shift();
+    return snip;
+  },
+  pickLane(){
+    let lane; do { lane=Math.floor(Math.random()*3); } while(lane===this.lastLane && Math.random()<0.85);
+    this.lastLane=lane; return lane;
+  },
+};
+
+/* ===================== Game (판당 상태) ===================== */
+const Game = {
+  diff:null, hardcore:false, blocks:[], target:null,
+  life:0, score:0, combo:0, maxCombo:0, kills:0, level:1,
+  hits:0, misses:0, missChar:{}, missCat:{},
+  elapsed:0, spawnTimer:0, over:false, completed:false, pendingFirst:null,
+  fieldH:0, floorY:0,
+
+  reset(diffKey){
+    this.diff=CONFIG.diffs[diffKey]; this.hardcore=$("#chk-hardcore").checked;
+    this.blocks.forEach(b=>b.destroy()); this.blocks=[]; this.target=null;
+    this.life=this.diff.life; this.score=0; this.combo=0; this.maxCombo=0; this.kills=0; this.level=1;
+    this.hits=0; this.misses=0; this.missChar={}; this.missCat={};
+    this.elapsed=0; this.over=false; this.completed=false; this.pendingFirst=null;
+    Spawner.init(SNIPPETS);
+  },
+  measureField(){
+    const r=playfield.getBoundingClientRect();
+    this.fieldH=r.height; this.floorY=r.height-4;
+  },
+  begin(){
+    this.measureField();
+    this.spawn(this.pendingFirst);
+    this.spawnTimer=CONFIG.spawnInterval(this.diff, this.level);
+  },
+  spawn(forced){
+    if(this.blocks.length>=CONFIG.capAt(this.diff.key,this.level)) return;
+    const snip=forced||Spawner.draw(this.diff);
+    const lane=Spawner.pickLane();
+    const ft=CONFIG.fallTime(this.diff, this.level);
+    this.blocks.push(new Block(snip, lane, ft, this.fieldH));
+  },
+  setTarget(b){ if(this.target) this.target.setTarget(false); this.target=b; if(b) b.setTarget(true); },
+  comboBreak(){ this.combo=0; },
+
+  killBlock(b){
+    this.combo++;
+    const mult=1+CONFIG.score.comboCoef*Math.min(this.combo, CONFIG.score.comboCap);
+    let gain=Math.round(b.code.length*CONFIG.score.perChar*mult);
+    if(!b.missed) gain+=CONFIG.score.noMiss;
+    this.score+=gain; this.kills++; this.maxCombo=Math.max(this.maxCombo,this.combo);
+    Audio2.kill();
+    b.el.classList.add("dead"); const el=b.el; setTimeout(()=>el.remove(),200);
+    this.blocks=this.blocks.filter(x=>x!==b);
+    if(this.target===b) this.target=null;
+    Hud.update();
+    if(this.kills % CONFIG.levelUpKills === 0){
+      if(this.level<CONFIG.maxLevel){ this.level++; showLevelBanner(this.level); Hud.update(); }
+      else { this.win(); }
+    }
+  },
+  blockHitFloor(b){
+    this.life--; this.comboBreak();
+    if(this.target===b) this.target=null;
+    b.el.classList.add("floorhit"); const el=b.el; setTimeout(()=>el.remove(),160);
+    this.blocks=this.blocks.filter(x=>x!==b);
+    Audio2.floor(); Hud.update();
+    if(this.life<=0) this.gameOver(false);
+  },
+  gameOver(completed){
+    if(this.over) return; this.over=true; this.completed=completed;
+    this.blocks.forEach(b=>b.destroy()); this.blocks=[]; this.target=null;
+    Result.show();
+  },
+  win(){ this.gameOver(true); },
+};
+
+/* ===================== InputEngine (TECH_SPEC §4) ===================== */
+const Input = {
+  handleChar(ch){
+    if(Game.over) return;
+    if(!Game.target){
+      const matches=Game.blocks.filter(b=>b.progress===0 && b.code[0]===ch);
+      if(matches.length){
+        matches.sort((a,b)=>b.y-a.y); // 바닥에 가장 가까운(y 큰) 블록
+        Game.setTarget(matches[0]);
+      } else {
+        Game.misses++; Game.comboBreak(); Audio2.err(); Hud.update(); return;
+      }
+    }
+    const t=Game.target, expected=t.code[t.progress];
+    if(ch===expected){
+      t.setProgress(t.progress+1); Game.hits++; Audio2.key();
+      if(t.progress===t.code.length) Game.killBlock(t);
+      else Hud.update();
+    } else {
+      Game.misses++; Game.comboBreak(); t.missed=true;
+      Game.missChar[expected]=(Game.missChar[expected]||0)+1;
+      Game.missCat[t.snip.category]=(Game.missCat[t.snip.category]||0)+1;
+      Audio2.err(); showX(t); t.shake();
+      if(Game.hardcore) t.setProgress(0);
+      Hud.update();
+    }
+  },
+};
+
+function showX(block){
+  const x=document.createElement("span");
+  x.className="xmark"; x.textContent="✗";
+  const rect=block.el.getBoundingClientRect(), pf=playfield.getBoundingClientRect();
+  x.style.left=(rect.left-pf.left+block.progress*11+18)+"px";
+  x.style.top=(rect.top-pf.top+2)+"px";
+  playfield.appendChild(x);
+  setTimeout(()=>x.remove(),300);
+}
+
+/* ===================== Loop (단일 rAF) ===================== */
+let rafId=null, lastTime=0;
+function frame(now){
+  rafId=requestAnimationFrame(frame);
+  let dt=(now-lastTime)/1000; lastTime=now;
+  if(Screen.current!=="play" || Game.over) return;
+  if(dt>0.1) dt=0.1; // 백그라운드 복귀 등 급변 방지
+  Game.elapsed+=dt;
+  for(const b of Game.blocks.slice()){
+    b.y+=b.v*dt; b.updatePos();
+    if(b.y+b.h>=Game.floorY) Game.blockHitFloor(b);
+  }
+  Game.spawnTimer-=dt;
+  // 화면이 비어 있으면 대기 없이 곧바로 다음 블록 (스폰 공백 제거)
+  if(Game.blocks.length===0 && Game.spawnTimer>CONFIG.emptyRespawn) Game.spawnTimer=CONFIG.emptyRespawn;
+  if(Game.spawnTimer<=0){
+    if(Game.blocks.length<CONFIG.capAt(Game.diff.key,Game.level)){
+      Game.spawn(); Game.spawnTimer=CONFIG.spawnInterval(Game.diff, Game.level);
+    } else { Game.spawnTimer=0; } // 자리 나면 즉시 스폰
+  }
+}
+
+/* ===================== HUD ===================== */
+const Hud = {
+  update(){
+    const life=Game.life, max=Game.diff?Game.diff.life:5;
+    let s=""; for(let i=0;i<max;i++) s+= i<life ? '<span class="full">♥</span>' : '<span class="empty">♡</span>';
+    const lv=$("#hud-lives"); lv.innerHTML=s; lv.setAttribute("aria-label","생명 "+life+"개");
+    $("#hud-score").textContent=Game.score.toLocaleString();
+    const cb=$("#hud-combo");
+    if(Game.combo>0){ cb.classList.remove("hidden"); cb.textContent="×"+Game.combo; cb.style.fontSize=(15+Math.min(Math.floor(Game.combo/5),3)*2)+"px"; }
+    else cb.classList.add("hidden");
+    $("#hud-level").textContent="LV "+Game.level;
+  },
+  ime(warn){
+    const el=$("#hud-ime"), banner=$("#ime-banner");
+    if(warn){ el.className="ime warn"; el.textContent="[한글 ⚠]"; banner.classList.remove("hidden"); }
+    else{ el.className="ime ok"; el.textContent="[영문 A]"; banner.classList.add("hidden"); }
+  },
+};
+
+/* ===================== Result ===================== */
+const Result = {
+  show(){
+    const total=Game.hits+Game.misses;
+    const acc= total>0 ? (Game.hits/total*100) : 100;
+    const cpm= Game.elapsed>0 ? Math.round(Game.hits/(Game.elapsed/60)) : 0;
+    const grade=CONFIG.gradeOf(acc, Game.level, Game.completed);
+    this.last={ grade, score:Game.score, acc:+acc.toFixed(1), cpm, maxCombo:Game.maxCombo, level:Game.level, completed:Game.completed };
+
+    $("#res-complete").classList.toggle("hidden", !Game.completed);
+    $("#res-title").textContent = Game.completed ? "완주 결과" : "게임 오버";
+    const g=$("#res-grade"); g.textContent=grade; g.className="result-grade grade-"+grade;
+
+    $("#res-stats").innerHTML=[
+      ["난이도",Game.diff.label+(Game.hardcore?" · 하드코어":"")],
+      ["총점",Game.score.toLocaleString()],
+      ["정확도",acc.toFixed(1)+"%"],
+      ["CPM",cpm+" <span style='color:var(--dim)'>(WPM "+Math.round(cpm/5)+")</span>"],
+      ["최대 콤보","×"+Game.maxCombo],
+      ["처치 블록",Game.kills+"개"],
+      ["도달 레벨","LV "+Game.level],
+    ].map(([k,v])=>`<span class="k">${k}</span><span class="v">${v}</span>`).join("");
+
+    // 약점 분석
+    const chars=Object.entries(Game.missChar).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const cats=Object.entries(Game.missCat).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    let weak="";
+    if(chars.length){
+      weak+="<b>자주 틀린 글자 TOP 3</b><br>"+chars.map(([c,n])=>`<code>${esc(c)}</code> ${n}회`).join(" · ")+"<br><br>";
+      const catTot=cats.reduce((s,[,n])=>s+n,0);
+      weak+="<b>자주 틀린 유형</b><br>"+cats.map(([c,n])=>`${c} ${Math.round(n/catTot*100)}%`).join(" · ");
+    } else {
+      weak="<b>오타 없이 클리어했어요! 🌟</b> 완벽한 타이핑입니다.";
+    }
+    $("#res-weak").innerHTML=weak;
+
+    // 최고 기록
+    const best=Storage.get("codedrop_best")||{};
+    const prev=best[Game.diff.key];
+    if(!prev || Game.score>prev.score){
+      best[Game.diff.key]={score:Game.score,acc:+acc.toFixed(1),cpm,grade,hardcore:Game.hardcore,date:this.today()};
+      Storage.set("codedrop_best",best);
+      $("#res-title").innerHTML+=' <span class="newrec">신기록! 🏆</span>';
+    }
+    Screen.show("result");
+  },
+  today(){ const d=new Date(),p=n=>String(n).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); },
+  when(){ const d=new Date(),p=n=>String(n).padStart(2,"0"); return this.today()+" "+p(d.getHours())+":"+p(d.getMinutes()); },
+  copy(btn){
+    const r=this.last; if(!r) return;
+    const id=$("#res-id").value.trim()||"(미입력)", nm=$("#res-name").value.trim()||"(미입력)";
+    const txt=[
+      "[코드 낙하 결과]",
+      "학번: "+id+" / 이름: "+nm,
+      "난이도: "+Game.diff.label+(Game.hardcore?"(하드코어)":"")+" · 등급: "+r.grade+" · 점수: "+r.score.toLocaleString(),
+      "정확도: "+r.acc+"% · CPM: "+r.cpm+" · 최대 콤보: "+r.maxCombo+" · 레벨 "+r.level+" 도달"+(r.completed?" · 완주":""),
+      "일시: "+this.when(),
+    ].join("\n");
+    const done=ok=>{ btn.textContent=ok?"✅ 복사됨! 붙여넣어 제출하세요":"❌ 복사 실패"; setTimeout(()=>btn.textContent="📋 결과 요약 복사 (제출용)",2000); };
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(txt).then(()=>done(true),()=>done(fallbackCopy(txt)));
+    } else done(fallbackCopy(txt));
+  },
+};
+function fallbackCopy(t){
+  const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select(); let ok=false;
+  try{ ok=document.execCommand("copy"); }catch(e){} ta.remove(); return ok;
+}
+
+/* ===================== ScreenManager ===================== */
+const Screen = {
+  current:"title",
+  els:{ title:"#screen-title", diff:"#screen-diff", count:"#screen-count", play:"#screen-play", result:"#screen-result" },
+  show(name){
+    for(const k in this.els) $(this.els[k]).classList.toggle("on", k===name);
+    this.current=name;
+    $("#pause-overlay").classList.add("hidden");
+    // 포커스 이동 (§7-3)
+    const scr=$(this.els[name]);
+    const af=scr.querySelector("[data-autofocus]")||scr.querySelector("button");
+    if(af) setTimeout(()=>af.focus(),30);
+  },
+};
+
+/* ===================== 레벨업 배너 ===================== */
+function showLevelBanner(lv){
+  const b=document.createElement("div");
+  b.textContent="LEVEL "+lv;
+  b.style.cssText="position:absolute;left:50%;top:40%;transform:translateX(-50%);font-family:var(--code-font);"+
+    "font-size:44px;font-weight:800;color:var(--target);z-index:7;pointer-events:none;text-shadow:0 2px 12px #000;";
+  playfield.appendChild(b);
+  setTimeout(()=>b.remove(),1000);
+}
+
+/* ===================== 흐름 제어 ===================== */
+let playfield;
+
+function startCountdown(diffKey){
+  Game.reset(diffKey);
+  Game.pendingFirst=Spawner.draw(Game.diff);
+  $("#count-preview").textContent=Game.pendingFirst.code;
+  Screen.show("count");
+  let n=3; $("#count-num").textContent=n;
+  const iv=setInterval(()=>{
+    n--;
+    if(n>=1){ $("#count-num").textContent=n; }
+    else { clearInterval(iv); startPlaying(); }
+  },800);
+}
+function startPlaying(){
+  Screen.show("play"); Hud.ime(false); Hud.update();
+  Game.begin();
+  lastTime=performance.now();
+  if(!rafId) rafId=requestAnimationFrame(frame);
+}
+function togglePause(){
+  if(Screen.current==="play"){ Screen.current="paused"; $("#pause-overlay").classList.remove("hidden"); setTimeout(()=>$("#btn-resume").focus(),30); }
+  else if(Screen.current==="paused"){ Screen.current="play"; $("#pause-overlay").classList.add("hidden"); lastTime=performance.now(); }
+}
+function quitToTitle(){ Game.over=true; Game.blocks.forEach(b=>b.destroy()); Game.blocks=[]; Screen.show("title"); }
+
+/* ===================== 설정 ===================== */
+const settings = Object.assign({sound:true,fontSize:2,hardcore:false}, Storage.get("codedrop_settings")||{});
+function applySettings(){
+  Audio2.muted=!settings.sound;
+  const sizes={1:"16px",2:"19px",3:"22px"};
+  document.documentElement.style.setProperty("--code-fs", sizes[settings.fontSize]||"19px");
+  $("#btn-sound").textContent = settings.sound ? "🔊 소리 켜짐" : "🔇 소리 꺼짐";
+  $("#btn-sound").setAttribute("aria-pressed", String(settings.sound));
+  document.querySelectorAll(".fontsize-opt button").forEach(b=>b.classList.toggle("on", +b.dataset.fs===settings.fontSize));
+  $("#chk-hardcore").checked=settings.hardcore;
+}
+function saveSettings(){ Storage.set("codedrop_settings", settings); }
+
+/* ===================== 키보드 (단일 리스너) ===================== */
+function onKey(e){
+  const s=Screen.current;
+  if(s==="play"){
+    if(e.isComposing || e.keyCode===229){ Hud.ime(true); e.preventDefault(); return; }
+    // 일시정지는 ESC만 — 'p'/'P'는 코드 글자(print 등)라 판정 대상이어야 함(설계 ESC/P 중 P는 충돌)
+    if(e.key==="Escape"){ e.preventDefault(); togglePause(); return; }
+    if(e.key==="Tab"){ e.preventDefault(); return; }
+    if(e.key.length===1){
+      Audio2.ensure(); Hud.ime(false);
+      if(e.key===" "||e.key==="'"||e.key==="/") e.preventDefault();
+      Input.handleChar(e.key);
+    }
+    return;
+  }
+  if(s==="paused"){
+    if(e.key==="Escape"||e.key==="p"||e.key==="P"||e.key==="Enter"){ e.preventDefault(); togglePause(); }
+    return;
+  }
+  if(s==="title"){ if(e.key==="Enter"){ e.preventDefault(); Audio2.ensure(); Screen.show("diff"); } return; }
+  if(s==="diff"){
+    if(e.key==="Escape"){ Screen.show("title"); }
+    else if(e.key==="1"){ selectDiff("beginner"); }
+    else if(e.key==="2"){ selectDiff("easy"); }
+    else if(e.key==="3"){ selectDiff("normal"); }
+    else if(e.key==="4"){ selectDiff("hard"); }
+    else if(e.key==="h"||e.key==="H"){ $("#chk-hardcore").checked=!$("#chk-hardcore").checked; settings.hardcore=$("#chk-hardcore").checked; saveSettings(); }
+    return;
+  }
+  if(s==="result"){
+    if(document.activeElement && document.activeElement.tagName==="INPUT") return; // 학번/이름 입력 중엔 무시
+    if(e.key==="r"||e.key==="R"||e.key==="Enter"){ e.preventDefault(); startCountdown(Game.diff.key); }
+    else if(e.key==="Escape"){ Screen.show("title"); }
+    return;
+  }
+}
+function selectDiff(key){ settings.hardcore=$("#chk-hardcore").checked; saveSettings(); Audio2.ensure(); startCountdown(key); }
+
+/* ===================== 초기화 ===================== */
+let SNIPPETS;
+function init(){
+  playfield=$("#playfield");
+  const loaded=loadSnippets(); SNIPPETS=loaded.snippets;
+  Spawner.init(SNIPPETS);
+  if(loaded.usedFallback) $("#fallback-badge").classList.remove("hidden");
+
+  // 거터 줄번호(장식)
+  let g=""; for(let i=1;i<=40;i++) g+=i+"<br>"; $("#gutter").innerHTML=g;
+
+  applySettings();
+
+  // 버튼 배선
+  $("#btn-start").onclick=()=>{ Audio2.ensure(); Screen.show("diff"); };
+  $("#btn-sound").onclick=()=>{ settings.sound=!settings.sound; saveSettings(); applySettings(); };
+  document.querySelectorAll(".fontsize-opt button").forEach(b=> b.onclick=()=>{ settings.fontSize=+b.dataset.fs; saveSettings(); applySettings(); });
+  document.querySelectorAll(".diff-card").forEach(c=> c.onclick=()=>selectDiff(c.dataset.diff));
+  $("#chk-hardcore").onchange=()=>{ settings.hardcore=$("#chk-hardcore").checked; saveSettings(); };
+  $("#btn-diff-back").onclick=()=>Screen.show("title");
+  $("#btn-pause").onclick=togglePause;
+  $("#btn-resume").onclick=togglePause;
+  $("#btn-quit").onclick=quitToTitle;
+  $("#btn-copy").onclick=function(){ Result.copy(this); };
+  $("#btn-retry").onclick=()=>startCountdown(Game.diff.key);
+  $("#btn-rediff").onclick=()=>Screen.show("diff");
+  $("#btn-home").onclick=()=>Screen.show("title");
+
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("compositionstart", ()=>{ if(Screen.current==="play") Hud.ime(true); });
+  document.addEventListener("visibilitychange", ()=>{ if(document.hidden && Screen.current==="play") togglePause(); });
+  window.addEventListener("resize", ()=>{ if(Screen.current==="play") Game.measureField(); });
+
+  Screen.show("title");
+}
+document.addEventListener("DOMContentLoaded", init);
+
+})();
+</script>
+</body>
+</html>
