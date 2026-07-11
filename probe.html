@@ -13,6 +13,19 @@ document.getElementById('f').onload=async()=>{
   const key=k=>doc.dispatchEvent(new win.KeyboardEvent('keydown',{key:k,bubbles:true}));
   const alive=()=>[...doc.querySelectorAll('.block')].filter(x=>!x.classList.contains('dead')&&!x.classList.contains('floorhit'));
   await sleep(300);
+  // ── v1.3 오늘의 도전: 같은 날+난이도 두 번 선택 → 첫 문제 동일(결정론) ──
+  key('Enter'); await sleep(150);                       // title→diff
+  doc.getElementById('chk-challenge').checked=true;
+  key('2'); await sleep(250);                           // 초급 challenge → countdown
+  const chA=doc.getElementById('count-preview').textContent;
+  await sleep(2600); key('Escape'); await sleep(150);   // →play→pause
+  doc.getElementById('btn-quit').click(); await sleep(200);   // →title
+  key('Enter'); await sleep(150); key('2'); await sleep(250); // 다시 초급 challenge
+  const chB=doc.getElementById('count-preview').textContent;
+  log('오늘의 도전 결정론(A===B): '+(chA===chB && chA.length>0)+' ["'+chA+'"]');
+  await sleep(2600); key('Escape'); await sleep(150);
+  doc.getElementById('btn-quit').click(); await sleep(200);
+  doc.getElementById('chk-challenge').checked=false;    // 이후 정규 플로우는 일반 모드
   key('Enter'); await sleep(120); key('1'); await sleep(2700); // 비기너 시작
   log('playing: '+doc.getElementById('screen-play').classList.contains('on'));
   // v1.2 온보딩 힌트: 첫 플레이에 보이고, 첫 타겟 잠금에 사라짐
