@@ -48,6 +48,10 @@ document.getElementById('f').onload=async()=>{
     await sleep(1000); guard++;
   }
   log('레벨업(8킬): '+doc.getElementById('hud-level').textContent.slice(0,20));
+  // v1.6 보스: 레벨업 직후 첫 스폰은 BOSS 블록
+  let bossSeen=false;
+  for(let i=0;i<12;i++){ await sleep(500); if(doc.querySelector('.block.boss')){ bossSeen=true; break; } }
+  log('보스 스니펫 등장: '+bossSeen);
   // 위험 경고 + 바닥 판정: 입력 중단하고 방치
   const livesBefore=doc.getElementById('hud-lives').getAttribute('aria-label');
   let dangerSeen=false;
@@ -77,6 +81,21 @@ document.getElementById('f').onload=async()=>{
     if(doc.getElementById('screen-result').classList.contains('on')) break; }
   const g2=doc.getElementById('res-growth').textContent;
   log('결과2 성장줄: '+(g2.includes('지난 판 대비')?'지난 판 대비 ✓':g2.slice(0,30)));
+  // ── v1.6 연습 모드: 낙하 정지 + 라이브 CPM + 기록 미저장 ──
+  key('Escape'); await sleep(150);                       // result → title
+  key('Enter'); await sleep(150);                        // → diff
+  doc.getElementById('chk-practice').checked=true;
+  key('1'); await sleep(2700);                           // 비기너 연습 시작
+  const pb=alive()[0];
+  const pt1=pb.style.transform; await sleep(1200); const pt2=pb.style.transform;
+  log('연습: 블록 정지: '+(pt1===pt2));
+  const pc=pb.querySelector('.code').textContent;
+  for(const ch of pc){ key(ch); await sleep(25); }
+  await sleep(300);
+  log('연습: 라이브 CPM 표시: '+(!doc.getElementById('hud-cpm').classList.contains('hidden') && doc.getElementById('hud-cpm').textContent.includes('CPM')));
+  const lastBefore=win.localStorage.getItem('codedrop_last');
+  key('Escape'); await sleep(150); doc.getElementById('btn-quit').click(); await sleep(200);
+  log('연습: 기록 미저장(quit 경로): '+(win.localStorage.getItem('codedrop_last')===lastBefore));
   log('DONE');
  }catch(e){ log('ERR '+e.message); }
 };

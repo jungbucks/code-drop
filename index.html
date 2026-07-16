@@ -58,6 +58,8 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
 .hardcore input{width:18px;height:18px;accent-color:var(--bad);cursor:pointer;}
 .hardcore.challenge{margin-top:10px;}
 .hardcore.challenge input{accent-color:var(--target);}
+.hardcore.practice{margin-top:10px;}
+.hardcore.practice input{accent-color:var(--ok);}
 #btn-diff-back{margin-top:22px;}
 
 /* ===== COUNTDOWN ===== */
@@ -75,6 +77,11 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
 #hud .score b{transition:none;}
 #hud .combo{background:#1e3a5f;color:var(--target);border:1px solid var(--target);border-radius:8px;padding:2px 10px;font-weight:800;font-family:var(--code-font);}
 #hud .level{color:var(--dim);font-weight:700;}
+/* v1.6 연습 모드 라이브 CPM */
+#hud .cpm{font-family:var(--code-font);font-size:14px;color:var(--ok);font-weight:700;}
+/* v1.6 보스 블록 — 금색 테두리+BOSS 태그 (파티클 없이 규칙으로 만드는 긴장) */
+.block.boss{border-color:var(--warn);box-shadow:0 0 0 2px var(--warn),0 6px 16px rgba(0,0,0,.45);}
+.block.boss .bosstag{display:inline-block;background:var(--warn);color:#3b2f14;font-size:11px;font-weight:800;border-radius:5px;padding:0 6px;margin-right:8px;vertical-align:2px;font-family:var(--ui-font);}
 /* v1.5 고스트 레이스 — 지난 판의 나와 같은 시점 점수 비교 (텍스트만, 이펙트 절제 §9) */
 #hud .ghostrace{font-family:var(--code-font);font-size:13px;color:var(--dim);}
 #hud .ghostrace .gu{color:var(--ok);font-weight:700;}
@@ -191,6 +198,7 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
     </div>
     <label class="hardcore"><input type="checkbox" id="chk-hardcore"> 하드코어 <kbd>H</kbd> — 오타 나면 그 줄을 처음부터 다시</label>
     <label class="hardcore challenge"><input type="checkbox" id="chk-challenge"> 🏅 오늘의 도전 <kbd>C</kbd> — 반 전체가 <b>똑같은 문제 순서</b>로 (점수 비교·대항전용)</label>
+    <label class="hardcore practice"><input type="checkbox" id="chk-practice"> 🎯 연습 모드 <kbd>P</kbd> — 낙하 없음 · <b>실시간 CPM</b>으로 타자 연습 (기록 저장 안 함)</label>
     <button id="btn-diff-back" class="btn ghost">← 처음으로 <kbd>Esc</kbd></button>
   </section>
 
@@ -205,6 +213,7 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
     <div id="hud">
       <span class="lives" id="hud-lives" aria-label="생명 5개"></span>
       <span class="score">점수 <b id="hud-score">0</b></span>
+      <span class="cpm hidden" id="hud-cpm" title="분당 정타 수 (연습 모드 라이브)"></span>
       <span class="combo hidden" id="hud-combo">×0</span>
       <span class="level" id="hud-level">LV 1</span>
       <span class="ghostrace hidden" id="hud-ghost" title="지난 판의 나(같은 시점 점수)와 레이스"></span>
@@ -269,6 +278,8 @@ const CONFIG = {
   levelUpKills:8, maxLevel:10, fallDecay:0.92, spawnFactor:0.6, minRespawnGap:5,
   emptyRespawn:0.6, // 화면에 블록이 없으면 다음 스폰까지 최대 0.6초 (대기 공백 제거)
   score:{ perChar:10, comboCoef:0.1, comboCap:10, noMiss:30 },
+  boss:{ fallMult:1.6, scoreMult:2, topN:3 }, // v1.6 보스: 레벨업 직후 1개 — 긴 코드 상위 3중 추첨, 느리게 낙하, 처치 시 점수 2배+화면 정리
+  practiceY:0.25, // v1.6 연습 모드: 블록이 화면 25% 지점에 정지
   capAt(key, lv){
     if(key==="beginner") return lv>=7 ? 2 : 1;
     if(key==="easy")   return lv>=6 ? 2 : 1;
@@ -376,12 +387,12 @@ const $ = sel => document.querySelector(sel);
 
 /* ===================== Block ===================== */
 class Block {
-  constructor(snip, lane, fallTime, fieldH){
-    this.snip=snip; this.code=snip.code; this.progress=0; this.missed=false; this.lane=lane;
+  constructor(snip, lane, fallTime, fieldH, boss){
+    this.snip=snip; this.code=snip.code; this.progress=0; this.missed=false; this.lane=lane; this.boss=!!boss;
     const el=document.createElement("div");
-    el.className="block lane-"+(lane===0?"left":lane===1?"center":"right");
+    el.className="block lane-"+(lane===0?"left":lane===1?"center":"right")+(boss?" boss":"");
     const chars=[...this.code].map(c=>`<span class="ch">${esc(c)}</span>`).join("");
-    el.innerHTML=`<span class="tmark" aria-hidden="true">▶</span><span class="code">${chars}</span>`;
+    el.innerHTML=(boss?'<span class="bosstag" aria-label="보스 블록">BOSS</span>':'')+`<span class="tmark" aria-hidden="true">▶</span><span class="code">${chars}</span>`;
     playfield.appendChild(el);
     this.el=el; this.spans=el.querySelectorAll(".ch");
     this.h=el.offsetHeight;
@@ -423,6 +434,13 @@ const Spawner = {
     let lane; do { lane=Math.floor(RNG.next()*3); } while(lane===this.lastLane && RNG.next()<0.85);
     this.lastLane=lane; return lane;
   },
+  /* v1.6 보스 추첨 — 현재 난이도 풀에서 가장 긴 코드 상위 topN 중 하나 (RNG라 오늘의 도전에서도 결정론) */
+  drawBoss(diff){
+    const lv=diff.mix[diff.mix.length-1][0];          // 난이도의 최상위 레벨 풀
+    let pool=this.byLevel[lv]; if(!pool||!pool.length) pool=this.all;
+    const top=pool.slice().sort((a,b)=>b.code.length-a.code.length).slice(0,CONFIG.boss.topN);
+    return top[Math.floor(RNG.next()*top.length)];
+  },
 };
 
 /* ===================== Game (판당 상태) ===================== */
@@ -436,13 +454,15 @@ const Game = {
 
   reset(diffKey){
     this.diff=CONFIG.diffs[diffKey]; this.hardcore=$("#chk-hardcore").checked;
+    this.practice=$("#chk-practice").checked;         // v1.6 연습 모드 (낙하 없음·기록 없음)
     this.blocks.forEach(b=>b.destroy()); this.blocks=[]; this.target=null;
     this.life=this.diff.life; this.score=0; this.combo=0; this.maxCombo=0; this.kills=0; this.level=1;
     this.hits=0; this.misses=0; this.missChar={}; this.missCat={}; this.snipStats={};
-    // v1.5 고스트 레이스: 직전 판(codedrop_last)의 2초 간격 점수 곡선과 실시간 비교
+    this.bossPending=false; this.bossKills=0;         // v1.6 보스: 레벨업 직후 1개 예약
+    // v1.5 고스트 레이스: 직전 판(codedrop_last)의 2초 간격 점수 곡선과 실시간 비교 (연습 모드 제외)
     this.curve=[]; this.curveIdx=0;
     const la=Storage.get("codedrop_last")||{}, prev=la[diffKey];
-    this.ghost=(prev && Array.isArray(prev.curve) && prev.curve.length) ? prev.curve : null;
+    this.ghost=(!this.practice && prev && Array.isArray(prev.curve) && prev.curve.length) ? prev.curve : null;
     this.elapsed=0; this.over=false; this.completed=false; this.pendingFirst=null;
     Spawner.init(SNIPPETS);
   },
@@ -461,10 +481,16 @@ const Game = {
   },
   spawn(forced){
     if(this.blocks.length>=CONFIG.capAt(this.diff.key,this.level)) return;
-    const snip=forced||Spawner.draw(this.diff);
+    const boss=!forced && this.bossPending;           // v1.6: 레벨업 직후 첫 스폰은 보스
+    if(boss) this.bossPending=false;
+    const snip=forced || (boss ? Spawner.drawBoss(this.diff) : Spawner.draw(this.diff));
     const lane=Spawner.pickLane();
-    const ft=CONFIG.fallTime(this.diff, this.level);
-    this.blocks.push(new Block(snip, lane, ft, this.fieldH));
+    let ft=CONFIG.fallTime(this.diff, this.level);
+    if(boss) ft*=CONFIG.boss.fallMult;                // 보스는 길지만 느리게
+    if(this.practice) ft=Infinity;                    // v1.6 연습: 낙하 정지 (v=0)
+    const b=new Block(snip, lane, ft, this.fieldH, boss);
+    if(this.practice){ b.y=this.fieldH*CONFIG.practiceY; b.updatePos(); }
+    this.blocks.push(b);
   },
   setTarget(b){
     if(this.target) this.target.setTarget(false);
@@ -482,15 +508,21 @@ const Game = {
     this.combo++;
     const mult=1+CONFIG.score.comboCoef*Math.min(this.combo, CONFIG.score.comboCap);
     let gain=Math.round(b.code.length*CONFIG.score.perChar*mult);
+    if(b.boss) gain*=CONFIG.boss.scoreMult;           // v1.6 보스 보너스
     if(!b.missed) gain+=CONFIG.score.noMiss;
     this.score+=gain; this.kills++; this.maxCombo=Math.max(this.maxCombo,this.combo);
     Audio2.kill();
     b.el.classList.add("dead"); const el=b.el; setTimeout(()=>el.remove(),200);
     this.blocks=this.blocks.filter(x=>x!==b);
     if(this.target===b) this.target=null;
+    if(b.boss){                                       // v1.6: 보스 처치 = 화면 정리(한숨 돌리기, 잡블록은 점수·처치 수 없이 소멸)
+      this.bossKills++;
+      this.blocks.forEach(x=>{ x.el.classList.add("dead"); const e=x.el; setTimeout(()=>e.remove(),200); });
+      this.blocks=[]; this.target=null;
+    }
     Hud.update();
     if(this.kills % CONFIG.levelUpKills === 0){
-      if(this.level<CONFIG.maxLevel){ this.level++; showLevelBanner(this.level); Hud.update(); }
+      if(this.level<CONFIG.maxLevel){ this.level++; showLevelBanner(this.level); this.bossPending=true; Hud.update(); }
       else { this.win(); }
     }
   },
@@ -561,7 +593,7 @@ function frame(now){
   Game.elapsed+=dt;
   // v1.5 고스트 레이스: 2초마다 점수 샘플 기록 + 고스트 대비 갱신
   const si=Math.floor(Game.elapsed/2);
-  if(si>Game.curveIdx){ Game.curveIdx=si; Game.curve.push(Game.score); Hud.ghost(); }
+  if(si>Game.curveIdx){ Game.curveIdx=si; Game.curve.push(Game.score); Hud.ghost(); Hud.cpm(); }
   for(const b of Game.blocks.slice()){
     b.y+=b.v*dt; b.updatePos();
     // v1.1: 바닥 72% 지점부터 위험 경고 (타겟 중인 블록은 제외 — 신호 혼선 방지)
@@ -593,7 +625,15 @@ const Hud = {
     const lvEl=$("#hud-level");
     lvEl.textContent="LV "+Game.level+" "+"●".repeat(prog)+"○".repeat(CONFIG.levelUpKills-prog);
     lvEl.setAttribute("aria-label","레벨 "+Game.level+", 다음 레벨까지 "+(CONFIG.levelUpKills-prog)+"개");
-    this.ghost();
+    this.ghost(); this.cpm();
+  },
+  /* v1.6 연습 모드 라이브 CPM — 게임 중 CPM 비표시 원칙의 유일한 예외 (GAME_DESIGN §7.1 개정) */
+  cpm(){
+    const el=$("#hud-cpm");
+    if(!Game.practice){ el.classList.add("hidden"); return; }
+    if(Game.elapsed<2){ el.textContent="CPM …"; el.classList.remove("hidden"); return; }
+    el.classList.remove("hidden");
+    el.textContent="CPM "+Math.round(Game.hits/(Game.elapsed/60));
   },
   /* v1.5 고스트 레이스 — 같은 시점의 '지난 판 나' 점수와 차이 표시 (직전 곡선이 있을 때만) */
   ghost(){
@@ -636,6 +676,8 @@ const Result = {
       ["도달 레벨","LV "+Game.level],
     ];
     if(Game.challenge) stats.unshift(["🏅 오늘의 도전", this.today()]); // v1.3 대항전 식별
+    if(Game.practice) stats.unshift(["🎯 모드","연습 (기록 없음)"]);      // v1.6
+    if(Game.bossKills) stats.push(["👑 보스 처치",Game.bossKills+"개"]); // v1.6
     $("#res-stats").innerHTML=stats.map(([k,v])=>`<span class="k">${k}</span><span class="v">${v}</span>`).join("");
 
     // 약점 분석
@@ -660,10 +702,17 @@ const Result = {
     if(!weak) weak="<b>오타 없이 클리어했어요! 🌟</b> 완벽한 타이핑입니다.";
     $("#res-weak").innerHTML=weak;
 
-    // v1.2 성장 비교 — "직전 판"과 비교 (최고 기록과 별개)
+    // v1.2 성장 비교 — "직전 판"과 비교 (최고 기록과 별개) / v1.6: 연습 모드는 기록 없음
     const lastAll=Storage.get("codedrop_last")||{};
     const prevRun=lastAll[Game.diff.key];
     const growth=$("#res-growth");
+    if(Game.practice){
+      growth.innerHTML="🎯 <b style='color:var(--ink)'>연습 모드</b> — 기록은 저장하지 않아요. 몸이 풀렸다면 실전에서 만나요!";
+      growth.classList.remove("hidden");
+      $("#btn-nextdiff").classList.add("hidden");
+      Screen.show("result");
+      return; // 연습은 codedrop_last/best 저장·신기록 판정 전부 생략
+    }
     if(prevRun){
       const fmt=(v,suffix)=> v>0 ? '<span class="up">▲ +'+v+suffix+'</span>'
                     : v<0 ? '<span class="dn">▼ '+v+suffix+'</span>' : '= 0'+suffix;
@@ -706,7 +755,7 @@ const Result = {
     const r=this.last; if(!r) return;
     const id=$("#res-id").value.trim()||"(미입력)", nm=$("#res-name").value.trim()||"(미입력)";
     const txt=[
-      "[코드 낙하 결과]"+(Game.challenge?" 🏅오늘의 도전 "+this.today():""),
+      "[코드 낙하 결과]"+(Game.challenge?" 🏅오늘의 도전 "+this.today():"")+(Game.practice?" 🎯연습":""),
       "학번: "+id+" / 이름: "+nm,
       "난이도: "+Game.diff.label+(Game.hardcore?"(하드코어)":"")+" · 등급: "+r.grade+" · 점수: "+r.score.toLocaleString(),
       "정확도: "+r.acc+"% · CPM: "+r.cpm+" · 최대 콤보: "+r.maxCombo+" · 레벨 "+r.level+" 도달"+(r.completed?" · 완주":""),
@@ -822,6 +871,7 @@ function onKey(e){
     else if(e.key==="4"){ selectDiff("hard"); }
     else if(e.key==="h"||e.key==="H"){ $("#chk-hardcore").checked=!$("#chk-hardcore").checked; settings.hardcore=$("#chk-hardcore").checked; saveSettings(); }
     else if(e.key==="c"||e.key==="C"){ $("#chk-challenge").checked=!$("#chk-challenge").checked; }
+    else if(e.key==="p"||e.key==="P"){ $("#chk-practice").checked=!$("#chk-practice").checked; } // v1.6
     return;
   }
   if(s==="result"){
