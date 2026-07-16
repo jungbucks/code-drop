@@ -75,6 +75,10 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
 #hud .score b{transition:none;}
 #hud .combo{background:#1e3a5f;color:var(--target);border:1px solid var(--target);border-radius:8px;padding:2px 10px;font-weight:800;font-family:var(--code-font);}
 #hud .level{color:var(--dim);font-weight:700;}
+/* v1.5 고스트 레이스 — 지난 판의 나와 같은 시점 점수 비교 (텍스트만, 이펙트 절제 §9) */
+#hud .ghostrace{font-family:var(--code-font);font-size:13px;color:var(--dim);}
+#hud .ghostrace .gu{color:var(--ok);font-weight:700;}
+#hud .ghostrace .gd{color:var(--bad);font-weight:700;}
 #hud .ime{margin-left:auto;font-family:var(--code-font);font-size:13px;padding:3px 9px;border-radius:6px;}
 #hud .ime.ok{color:var(--ok);border:1px solid var(--ok);}
 #hud .ime.warn{color:var(--warn);border:1px solid var(--warn);background:#3b2f14;}
@@ -203,6 +207,7 @@ kbd{background:#334155;border:1px solid #475569;border-radius:5px;padding:1px 7p
       <span class="score">점수 <b id="hud-score">0</b></span>
       <span class="combo hidden" id="hud-combo">×0</span>
       <span class="level" id="hud-level">LV 1</span>
+      <span class="ghostrace hidden" id="hud-ghost" title="지난 판의 나(같은 시점 점수)와 레이스"></span>
       <span class="ime ok" id="hud-ime">[영문 A]</span>
       <button id="btn-pause" aria-label="일시정지">⏸</button>
     </div>
@@ -356,7 +361,7 @@ function loadSnippets(){
     if(![0,1,2,3].includes(s.level)){ console.warn("스니펫 제외(레벨):",c); continue; }
     if(seen.has(s.id)){ console.warn("스니펫 제외(id 중복):",s.id); continue; }
     seen.add(s.id);
-    valid.push({id:s.id, level:s.level, category:s.category||"output", code:c});
+    valid.push({id:s.id, level:s.level, category:s.category||"output", code:c, exp:typeof s.exp==="string"?s.exp:""});
   }
   if(valid.length===0){ // 커스텀이 전부 걸러졌으면 폴백
     for(const s of FALLBACK) valid.push(Object.assign({},s));
@@ -424,7 +429,8 @@ const Spawner = {
 const Game = {
   diff:null, hardcore:false, challenge:false, blocks:[], target:null,
   life:0, score:0, combo:0, maxCombo:0, kills:0, level:1,
-  hits:0, misses:0, missChar:{}, missCat:{},
+  hits:0, misses:0, missChar:{}, missCat:{}, snipStats:{},
+  curve:[], curveIdx:0, ghost:null,
   elapsed:0, spawnTimer:0, over:false, completed:false, pendingFirst:null,
   fieldH:0, floorY:0,
 
@@ -432,9 +438,17 @@ const Game = {
     this.diff=CONFIG.diffs[diffKey]; this.hardcore=$("#chk-hardcore").checked;
     this.blocks.forEach(b=>b.destroy()); this.blocks=[]; this.target=null;
     this.life=this.diff.life; this.score=0; this.combo=0; this.maxCombo=0; this.kills=0; this.level=1;
-    this.hits=0; this.misses=0; this.missChar={}; this.missCat={};
+    this.hits=0; this.misses=0; this.missChar={}; this.missCat={}; this.snipStats={};
+    // v1.5 고스트 레이스: 직전 판(codedrop_last)의 2초 간격 점수 곡선과 실시간 비교
+    this.curve=[]; this.curveIdx=0;
+    const la=Storage.get("codedrop_last")||{}, prev=la[diffKey];
+    this.ghost=(prev && Array.isArray(prev.curve) && prev.curve.length) ? prev.curve : null;
     this.elapsed=0; this.over=false; this.completed=false; this.pendingFirst=null;
     Spawner.init(SNIPPETS);
+  },
+  /* v1.5 오답 리포트: 스니펫 단위 오타/놓침 집계 */
+  snipStat(snip){
+    return this.snipStats[snip.id] || (this.snipStats[snip.id]={code:snip.code, exp:snip.exp||"", miss:0, floor:0});
   },
   measureField(){
     const r=playfield.getBoundingClientRect();
@@ -482,6 +496,7 @@ const Game = {
   },
   blockHitFloor(b){
     this.life--; this.comboBreak();
+    this.snipStat(b.snip).floor++;
     if(this.target===b) this.target=null;
     b.el.classList.add("floorhit"); const el=b.el; setTimeout(()=>el.remove(),160);
     this.blocks=this.blocks.filter(x=>x!==b);
@@ -518,6 +533,7 @@ const Input = {
       Game.misses++; Game.comboBreak(); t.missed=true;
       Game.missChar[expected]=(Game.missChar[expected]||0)+1;
       Game.missCat[t.snip.category]=(Game.missCat[t.snip.category]||0)+1;
+      Game.snipStat(t.snip).miss++;
       Audio2.err(); showX(t); t.shake();
       if(Game.hardcore) t.setProgress(0);
       Hud.update();
@@ -543,6 +559,9 @@ function frame(now){
   if(Screen.current!=="play" || Game.over) return;
   if(dt>0.1) dt=0.1; // 백그라운드 복귀 등 급변 방지
   Game.elapsed+=dt;
+  // v1.5 고스트 레이스: 2초마다 점수 샘플 기록 + 고스트 대비 갱신
+  const si=Math.floor(Game.elapsed/2);
+  if(si>Game.curveIdx){ Game.curveIdx=si; Game.curve.push(Game.score); Hud.ghost(); }
   for(const b of Game.blocks.slice()){
     b.y+=b.v*dt; b.updatePos();
     // v1.1: 바닥 72% 지점부터 위험 경고 (타겟 중인 블록은 제외 — 신호 혼선 방지)
@@ -574,6 +593,18 @@ const Hud = {
     const lvEl=$("#hud-level");
     lvEl.textContent="LV "+Game.level+" "+"●".repeat(prog)+"○".repeat(CONFIG.levelUpKills-prog);
     lvEl.setAttribute("aria-label","레벨 "+Game.level+", 다음 레벨까지 "+(CONFIG.levelUpKills-prog)+"개");
+    this.ghost();
+  },
+  /* v1.5 고스트 레이스 — 같은 시점의 '지난 판 나' 점수와 차이 표시 (직전 곡선이 있을 때만) */
+  ghost(){
+    const el=$("#hud-ghost");
+    if(!Game.ghost){ el.classList.add("hidden"); return; }
+    const k=Math.floor(Game.elapsed/2)-1;
+    const g=k<0 ? 0 : Game.ghost[Math.min(k, Game.ghost.length-1)];
+    const d=Game.score-g;
+    el.classList.remove("hidden");
+    el.innerHTML="👻 "+g.toLocaleString()+" "+(d>0?'<span class="gu">▲+'+d.toLocaleString()+'</span>'
+      : d<0?'<span class="gd">▼'+d.toLocaleString()+'</span>':'=');
   },
   ime(warn){
     const el=$("#hud-ime"), banner=$("#ime-banner");
@@ -615,9 +646,18 @@ const Result = {
       weak+="<b>자주 틀린 글자 TOP 3</b><br>"+chars.map(([c,n])=>`<code>${esc(c)}</code> ${n}회`).join(" · ")+"<br><br>";
       const catTot=cats.reduce((s,[,n])=>s+n,0);
       weak+="<b>자주 틀린 유형</b><br>"+cats.map(([c,n])=>`${c} ${Math.round(n/catTot*100)}%`).join(" · ");
-    } else {
-      weak="<b>오타 없이 클리어했어요! 🌟</b> 완벽한 타이핑입니다.";
     }
+    // v1.5 오답 리포트 — 오타·놓침이 몰린 스니펫 TOP 3 + 한 줄 해설(snippets.js exp)
+    const snips=Object.values(Game.snipStats).filter(s=>s.miss+s.floor>0)
+      .sort((a,b)=>(b.floor*3+b.miss)-(a.floor*3+a.miss)).slice(0,3);
+    if(snips.length){
+      weak+=(weak?"<br><br>":"")+"<b>📌 다시 볼 코드 TOP "+snips.length+"</b><br>"+snips.map(s=>{
+        const codeHtml=[...s.code].map(esc).join("");
+        const cnt=[s.miss?("오타 "+s.miss+"회"):"", s.floor?("놓침 "+s.floor+"회"):""].filter(Boolean).join(" · ");
+        return `<code style="color:var(--ink)">${codeHtml}</code> <span>— ${cnt}</span>`+(s.exp?`<br>&nbsp;&nbsp;↳ ${s.exp}`:"");
+      }).join("<br>");
+    }
+    if(!weak) weak="<b>오타 없이 클리어했어요! 🌟</b> 완벽한 타이핑입니다.";
     $("#res-weak").innerHTML=weak;
 
     // v1.2 성장 비교 — "직전 판"과 비교 (최고 기록과 별개)
@@ -635,7 +675,8 @@ const Result = {
       growth.innerHTML="📈 이 난이도의 <b style='color:var(--ink)'>첫 기록!</b> 다음 판부터 지난 판과의 성장 비교가 표시됩니다.";
     }
     growth.classList.remove("hidden");
-    lastAll[Game.diff.key]={score:Game.score,acc:+acc.toFixed(1),cpm,maxCombo:Game.maxCombo,date:this.today()};
+    // v1.5: 점수 곡선(2초 간격)도 함께 저장 — 다음 판 고스트 레이스 재료 (이름 없음, 기존 개인정보 규칙 유지)
+    lastAll[Game.diff.key]={score:Game.score,acc:+acc.toFixed(1),cpm,maxCombo:Game.maxCombo,date:this.today(),curve:Game.curve.slice(0,600)};
     Storage.set("codedrop_last",lastAll);
 
     // v1.2 완주 시 다음 난이도 도전 버튼 (성장 사다리)
@@ -727,7 +768,7 @@ function startCountdown(diffKey){
   },800);
 }
 function startPlaying(){
-  Screen.show("play"); Hud.ime(false); Hud.update();
+  Screen.show("play"); Hud.ime(false); Hud.update(); Hud.ghost();
   // v1.2 온보딩: 처음 플레이하는 사용자에게만 타겟팅 힌트
   $("#hint-target").classList.toggle("hidden", !!Storage.get("codedrop_seen"));
   Game.begin();

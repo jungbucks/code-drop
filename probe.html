@@ -63,7 +63,16 @@ document.getElementById('f').onload=async()=>{
   const g1=doc.getElementById('res-growth').textContent;
   log('결과1 성장줄: '+(g1.includes('첫 기록')?'첫 기록 ✓':g1.slice(0,30)));
   log('완주 아님 → 다음 난이도 버튼 숨김: '+doc.getElementById('btn-nextdiff').classList.contains('hidden'));
+  // v1.5 오답 리포트: 바닥에 놓친 블록들이 '다시 볼 코드'로 집계되어야 함
+  log('오답 리포트(다시 볼 코드): '+doc.getElementById('res-weak').textContent.includes('다시 볼 코드'));
+  // v1.5 곡선 저장: 다음 판 고스트 레이스 재료
+  const saved=JSON.parse(win.localStorage.getItem('codedrop_last'));
+  log('점수 곡선 저장: '+(saved && saved.beginner && Array.isArray(saved.beginner.curve) && saved.beginner.curve.length>0));
   key('r'); await sleep(2900); // 같은 난이도 재시작
+  // v1.5 고스트 레이스: 직전 곡선이 있으니 두 번째 판 HUD에 👻 표시
+  await sleep(2200);
+  const gh=doc.getElementById('hud-ghost');
+  log('고스트 레이스 HUD: '+(!gh.classList.contains('hidden') && gh.textContent.includes('👻')));
   for(let i=0;i<200;i++){ await sleep(1000);
     if(doc.getElementById('screen-result').classList.contains('on')) break; }
   const g2=doc.getElementById('res-growth').textContent;

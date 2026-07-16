@@ -41,6 +41,7 @@ code-drop/
 
 - 로드 시 **유효성 필터**(통과 못 한 항목은 콘솔 경고 후 제외): ① `code`가 1~34자 ② ASCII 인쇄 가능 문자만(0x20~0x7E) ③ 개행·탭 없음 ④ 선행 공백 없음 ⑤ id 중복 없음.
 - 초기 데이터: GAME_DESIGN §5의 100개를 그대로 입력한다(임의 수정 금지).
+- ⚠️ **v1.5 패치(2026-07-16)**: ① 고스트 레이스 — `frame()`이 2초마다 `Game.curve`에 점수 샘플 push, `Result.show()`가 `codedrop_last[diff].curve`(최대 600개)로 저장, 다음 판 `Game.ghost`로 로드해 `Hud.ghost()`(#hud-ghost)가 같은 시점 점수 차 표시. ② 오답 리포트 — `Game.snipStat(snip)`이 스니펫별 {miss, floor} 집계(오타는 Input, 놓침은 blockHitFloor), 결과 화면 #res-weak에 "다시 볼 코드 TOP 3"+`exp` 해설. `loadSnippets()`가 선택 필드 `exp:string` 통과. 규칙 원본 GAME_DESIGN §7.1(고스트)·§7.2(오답 리포트).
 - ⚠️ **v1.3 패치(2026-07-11)**: 오늘의 도전 — 시드 RNG(`xmur3`+`mulberry32`, `RNG` 객체) 도입. `Spawner.draw/pickLane`의 `Math.random()`을 `RNG.next()`로 교체(시드 없으면 Math.random 폴백). `startCountdown`이 `Game.challenge`면 `RNG.seed("codedrop-challenge-"+diffKey+"-"+오늘)`, 아니면 `RNG.clear()`. 난이도 화면 `#chk-challenge`(C키), 결과·복사 태그. 규칙 원본 GAME_DESIGN §6.
 - ⚠️ **v1.1 패치(2026-07-10)**: 위험 경고(.block.danger, frame 루프에서 floorY*0.72 판정) · 타건음 콤보 피치(Audio2.key(combo)) · HUD 레벨 진행 도트(Hud.update) — 규칙 원본은 GAME_DESIGN §9 v1.1 항목.
 - ⚠️ **확정된 변경(2026-07-10)**: ① 난이도 **비기너** 추가(level 0 풀, GAME_DESIGN §4.1·§5.0 — 유효성 검사도 level 0 허용, localStorage 최고기록 키 `beginner` 추가). ② 페이싱 수정 — `spawnFactor` 0.75→**0.6**, 화면에 블록 0개면 스폰 대기를 **0.6초로 클램프**(`CONFIG.emptyRespawn`). 난이도 선택 숫자키는 1=비기너 2=초급 3=중급 4=고급.
@@ -81,8 +82,9 @@ code-drop/
   "normal": { ... }, "hard": { ... } }
 // key: "codedrop_settings"
 { "sound": true, "fontSize": 2, "hardcore": false }   // fontSize: 1|2|3 = 16|19|22px
-// key: "codedrop_last" (v1.2) — 난이도별 <직전 판> 기록 (성장 비교용, best와 별개)
-{ "easy": { "score": 9120, "acc": 91.0, "cpm": 160, "maxCombo": 9, "date": "2026-07-11" }, ... }
+// key: "codedrop_last" (v1.2, v1.5에 curve 추가) — 난이도별 <직전 판> 기록 (성장 비교 + 고스트 레이스)
+{ "easy": { "score": 9120, "acc": 91.0, "cpm": 160, "maxCombo": 9, "date": "2026-07-11",
+            "curve": [120, 260, 410] /* v1.5: 2초 간격 점수 샘플(최대 600) — 이름 없음 */ }, ... }
 // key: "codedrop_seen" (v1.2) — 온보딩 힌트 1회 노출 플래그 (1)
 ```
 
