@@ -23,6 +23,7 @@
 - v1.3 (07-11): 🏅 오늘의 도전 — 날짜+난이도 시드 결정론 RNG(mulberry32)로 반 전원 동일 문제 순서(대항전). 난이도 화면 C키 토글, 결과·복사 태그. probe.html에 결정론(A===B) 검증 추가.
 - v1.4 (07-12): 🏅 오늘의 도전 랭킹 수합기 `teacher-ranking.html`(교사용, 별도 파일) — 학생 결과 복사 텍스트 붙여넣기→파싱→최고점 순위표+필터+TSV 복사. probe-ranking으로 검증(임시, 삭제됨).
 - v1.5 (07-16): 👻 고스트 레이스(직전 판 점수 곡선과 실시간 비교, codedrop_last.curve) + 📌 오답 리포트(스니펫별 오타·놓침 TOP 3 + snippets.js `exp` 한 줄 해설 — 전 100문항 작성). probe에 3검증 추가, DONE 완주.
+- v1.7 (07-20): 🌗 낮/밤 색 모드 토글(day/night, 사용자 지시) — 하드코딩 중립색 12종을 CSS 변수화(--border/--surface2/--warn-bg 등) + `:root[data-theme="light"]` 라이트 테마 + 타이틀 설정에 `#btn-theme` 버튼. `codedrop_settings.theme`('dark'|'light') 저장, applySettings가 `documentElement.dataset.theme` 적용. 라이트는 액센트 진하게(가독성)·primary 버튼 텍스트 흰색(--on-target). 게임 로직 무변경(CSS만) — probe 회귀 없음, 라이트 타이틀·플레이 스크린샷 확인.
 - v1.6 (07-16): 👑 보스 스니펫(레벨업 직후 1개, 느리게·×2·처치 시 화면 소거, CONFIG.boss) + 🎯 연습 모드(P키 토글, 낙하 정지·라이브 CPM·무기록 — **GAME_DESIGN §6의 "연습 모드 금지" 조항을 사용자 지시로 개정**). probe 보스·연습 3검증 추가, DONE 완주.
 
 ## 검증
