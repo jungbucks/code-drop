@@ -96,6 +96,15 @@ document.getElementById('f').onload=async()=>{
   const lastBefore=win.localStorage.getItem('codedrop_last');
   key('Escape'); await sleep(150); doc.getElementById('btn-quit').click(); await sleep(200);
   log('연습: 기록 미저장(quit 경로): '+(win.localStorage.getItem('codedrop_last')===lastBefore));
+  // ── v1.7 예약어 연습(단어 드릴): 진입 → 첫 단어 완주 → 진행/정확도 ──
+  doc.getElementById('btn-kw').click(); await sleep(200);
+  log('예약어: kw 화면 진입: '+doc.getElementById('screen-kw').classList.contains('on'));
+  const kwWord=doc.getElementById('kw-word').textContent;
+  for(const ch of kwWord){ key(ch); await sleep(15); }
+  await sleep(50);
+  log('예약어: 첫 단어 완주 → 진행 1/35: '+(doc.getElementById('kw-prog').textContent==='1/35'));
+  key('Z'); await sleep(30);
+  log('예약어: 오타 시 정확도<100%: '+(parseInt(doc.getElementById('kw-acc').textContent)<100));
   log('DONE');
  }catch(e){ log('ERR '+e.message); }
 };

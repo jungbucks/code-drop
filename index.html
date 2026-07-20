@@ -167,6 +167,27 @@ kbd{background:var(--border);border:1px solid var(--border2);border-radius:5px;p
   .xmark{animation:none;}
   .title-card h1 .cursor-blink{animation:none;}
 }
+/* ── 예약어 연습(단어 드릴) ── */
+.kw-entry{margin-top:14px;font-size:14px;}
+#screen-kw{flex-direction:column;justify-content:flex-start;padding:36px 20px;}
+.kw-wrap{width:100%;max-width:720px;margin:0 auto;}
+.kw-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;}
+.kw-head h2{font-size:24px;margin:0;}
+.kw-stats{display:flex;gap:28px;justify-content:center;font-size:15px;color:var(--dim);margin-bottom:36px;}
+.kw-stats b{color:var(--ink);font-family:var(--code-font);font-size:21px;margin-left:6px;}
+.kw-stage{text-align:center;}
+.kw-word{font-family:var(--code-font);font-size:56px;font-weight:600;letter-spacing:2px;min-height:74px;line-height:1.1;}
+.kw-word .ch{color:var(--dim);}
+.kw-word .ch.done{color:var(--ok);}
+.kw-word .ch.cursor{color:var(--target);border-bottom:4px solid var(--target);}
+.kw-word.wrong{animation:kwshake .18s;}
+@keyframes kwshake{25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+.kw-upcoming{margin-top:30px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center;min-height:38px;}
+.kw-upcoming span{font-family:var(--code-font);font-size:16px;color:var(--muted2);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 12px;}
+.kw-hint{text-align:center;color:var(--dim);font-size:14px;margin-top:44px;line-height:1.7;}
+.kw-result-stats{font-size:18px;line-height:2;margin:6px 0 22px;color:var(--dim);}
+.kw-result-stats b{font-family:var(--code-font);color:var(--target);}
+.kw-result-btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
 </style>
 </head>
 <body>
@@ -178,6 +199,7 @@ kbd{background:var(--border);border:1px solid var(--border2);border-radius:5px;p
       <h1>코드 낙하<span class="cursor-blink">_</span></h1>
       <p class="subtitle">떨어지는 파이썬 코드를 정확히 타이핑해서 없애자</p>
       <button id="btn-start" class="btn primary" data-autofocus>시작하기 <kbd>Enter</kbd></button>
+      <button id="btn-kw" class="btn ghost kw-entry">⌨ 예약어 연습 — 파이썬 키워드 35개 타자 드릴</button>
       <div class="title-opts">
         <button id="btn-sound" class="btn ghost" aria-pressed="true">🔊 소리 켜짐</button>
         <button id="btn-theme" class="btn ghost" aria-pressed="false" title="낮/밤 색 모드 전환">🌙 밤</button>
@@ -243,6 +265,36 @@ kbd{background:var(--border);border:1px solid var(--border2);border-radius:5px;p
     </div>
     <div id="ime-banner" class="hidden">⚠ 한/영 키를 눌러 영문으로 전환하세요!</div>
     <div id="hint-target" class="hidden">💡 블록의 <b>첫 글자</b>를 치면 그 블록이 잠겨요 — 그다음부터 이어서 치면 됩니다!</div>
+  </section>
+
+  <!-- 예약어 연습 (단어 드릴 · 낙하 없음) -->
+  <section id="screen-kw" class="screen">
+    <div class="kw-wrap">
+      <div class="kw-head">
+        <h2>⌨ 파이썬 예약어 연습</h2>
+        <button id="btn-kw-back" class="btn ghost">← 홈 <kbd>Esc</kbd></button>
+      </div>
+      <div class="kw-stats">
+        <span>진행 <b id="kw-prog">0/35</b></span>
+        <span>CPM <b id="kw-cpm">0</b></span>
+        <span>정확도 <b id="kw-acc">100%</b></span>
+      </div>
+      <div class="kw-stage">
+        <div class="kw-word" id="kw-word"></div>
+        <div class="kw-upcoming" id="kw-upcoming" aria-hidden="true"></div>
+      </div>
+      <p class="kw-hint">떨어지지 않아요 — 화면의 예약어를 그대로 타이핑하세요. 오타는 넘어가지 않고, 정타만 다음 글자로. <kbd>Esc</kbd>로 홈.</p>
+    </div>
+    <div class="overlay kw-result-overlay hidden" id="kw-result">
+      <div class="overlay-card">
+        <h2>연습 끝! 🎉</h2>
+        <div class="kw-result-stats" id="kw-result-body"></div>
+        <div class="kw-result-btns">
+          <button id="btn-kw-retry" class="btn primary" data-autofocus>다시 <kbd>Enter</kbd></button>
+          <button id="btn-kw-home" class="btn ghost">홈으로</button>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- PAUSE -->
@@ -590,6 +642,61 @@ const Input = {
   },
 };
 
+/* ===================== 예약어 연습 (단어 드릴, 낙하 없음) ===================== */
+const KW = {
+  words:["False","None","True","and","as","assert","async","await","break","class",
+    "continue","def","del","elif","else","except","finally","for","from","global",
+    "if","import","in","is","lambda","nonlocal","not","or","pass","raise",
+    "return","try","while","with","yield"],
+  order:[], idx:0, pos:0, correct:0, keys:0, t0:0, spans:null, done:false,
+  start(){
+    this.order=this.words.slice();
+    for(let i=this.order.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=this.order[i]; this.order[i]=this.order[j]; this.order[j]=t; }
+    this.idx=0; this.correct=0; this.keys=0; this.t0=0; this.done=false;
+    $("#kw-result").classList.add("hidden");
+    this.renderWord(); this.stats();
+  },
+  renderWord(){
+    const w=this.order[this.idx];
+    $("#kw-word").innerHTML=[...w].map(c=>`<span class="ch">${esc(c)}</span>`).join("");
+    this.spans=$("#kw-word").querySelectorAll(".ch"); this.pos=0; this.paint();
+    $("#kw-upcoming").innerHTML=this.order.slice(this.idx+1,this.idx+7).map(x=>`<span>${esc(x)}</span>`).join("");
+  },
+  paint(){ this.spans.forEach((s,i)=>{ s.classList.toggle("done",i<this.pos); s.classList.toggle("cursor",i===this.pos); }); },
+  stats(){
+    $("#kw-prog").textContent=this.idx+"/"+this.order.length;
+    const min=this.t0?(performance.now()-this.t0)/60000:0;
+    $("#kw-cpm").textContent=min>0?Math.round(this.correct/min):0;
+    $("#kw-acc").textContent=(this.keys?Math.round(this.correct/this.keys*100):100)+"%";
+  },
+  handle(ch){
+    if(this.done) return;
+    if(!this.t0) this.t0=performance.now();
+    const w=this.order[this.idx];
+    this.keys++;
+    if(ch===w[this.pos]){
+      this.correct++; this.pos++; Audio2.key(0); this.paint();
+      if(this.pos===w.length){
+        this.idx++;
+        if(this.idx>=this.order.length){ this.finish(); return; }
+        this.renderWord();
+      }
+    } else {
+      Audio2.err();
+      const el=$("#kw-word"); el.classList.remove("wrong"); void el.offsetWidth; el.classList.add("wrong");
+    }
+    this.stats();
+  },
+  finish(){
+    this.done=true;
+    const ms=Math.max(performance.now()-this.t0, 1), sec=(ms/1000).toFixed(1), cpm=Math.round(this.correct/(ms/60000));
+    $("#kw-prog").textContent=this.order.length+"/"+this.order.length;
+    $("#kw-result-body").innerHTML=`예약어 <b>${this.order.length}</b>개 완주 · <b>${sec}</b>초<br>CPM <b>${cpm}</b> · 정확도 <b>${Math.round(this.correct/this.keys*100)}%</b>`;
+    $("#kw-result").classList.remove("hidden");
+    $("#btn-kw-retry").focus();
+  },
+};
+
 function showX(block){
   const x=document.createElement("span");
   x.className="xmark"; x.textContent="✗";
@@ -793,7 +900,7 @@ function fallbackCopy(t){
 /* ===================== ScreenManager ===================== */
 const Screen = {
   current:"title",
-  els:{ title:"#screen-title", diff:"#screen-diff", count:"#screen-count", play:"#screen-play", result:"#screen-result" },
+  els:{ title:"#screen-title", diff:"#screen-diff", count:"#screen-count", play:"#screen-play", result:"#screen-result", kw:"#screen-kw" },
   show(name){
     for(const k in this.els) $(this.els[k]).classList.toggle("on", k===name);
     this.current=name;
@@ -883,6 +990,18 @@ function onKey(e){
     if(e.key==="Escape"||e.key==="p"||e.key==="P"||e.key==="Enter"){ e.preventDefault(); togglePause(); }
     return;
   }
+  if(s==="kw"){
+    const resultOpen = !$("#kw-result").classList.contains("hidden");
+    if(resultOpen){
+      if(e.key==="Enter"){ e.preventDefault(); KW.start(); }
+      else if(e.key==="Escape"){ e.preventDefault(); Screen.show("title"); }
+      return;
+    }
+    if(e.key==="Escape"){ e.preventDefault(); Screen.show("title"); return; }
+    if(e.isComposing||e.keyCode===229){ e.preventDefault(); return; } // 한글 IME 무시 — 예약어는 영문
+    if(e.key.length===1){ Audio2.ensure(); KW.handle(e.key); }
+    return;
+  }
   if(s==="title"){ if(e.key==="Enter"){ e.preventDefault(); Audio2.ensure(); Screen.show("diff"); } return; }
   if(s==="diff"){
     if(e.key==="Escape"){ Screen.show("title"); }
@@ -919,6 +1038,10 @@ function init(){
 
   // 버튼 배선
   $("#btn-start").onclick=()=>{ Audio2.ensure(); Screen.show("diff"); };
+  $("#btn-kw").onclick=()=>{ Audio2.ensure(); Screen.show("kw"); KW.start(); };
+  $("#btn-kw-back").onclick=()=>Screen.show("title");
+  $("#btn-kw-retry").onclick=()=>KW.start();
+  $("#btn-kw-home").onclick=()=>Screen.show("title");
   $("#btn-sound").onclick=()=>{ settings.sound=!settings.sound; saveSettings(); applySettings(); };
   $("#btn-theme").onclick=()=>{ settings.theme=(settings.theme==="light")?"dark":"light"; saveSettings(); applySettings(); };
   document.querySelectorAll(".fontsize-opt button").forEach(b=> b.onclick=()=>{ settings.fontSize=+b.dataset.fs; saveSettings(); applySettings(); });
