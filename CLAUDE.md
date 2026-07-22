@@ -16,22 +16,18 @@
 5. 난이도 4종(2026-07-10 비기너 추가): 숫자키 1=비기너 2=초급 3=중급 4=고급. 스니펫 level 0~3.
 6. 페이싱(2026-07-10): spawnFactor 0.6 + 화면에 블록 0개면 스폰 대기 0.6초 클램프(`CONFIG.emptyRespawn`).
 
-## 패치 이력 (점진 패치 노선 — 상세는 GAME_DESIGN/TECH_SPEC 패치 로그)
+## 현재 상태 (v1.8) — 상세 패치 로그는 GAME_DESIGN/TECH_SPEC
 
-- v1.1 (07-10): 위험 경고(바닥 72%, 주황 점선) · 콤보 타건음 피치 · HUD 레벨 진행 도트
-- v1.2 (07-11): 직전 판 성장 비교(▲▼) · 완주 시 다음 난이도 도전 버튼 · 첫 판 타겟팅 온보딩 힌트
-- v1.3 (07-11): 🏅 오늘의 도전 — 날짜+난이도 시드 결정론 RNG(mulberry32)로 반 전원 동일 문제 순서(대항전). 난이도 화면 C키 토글, 결과·복사 태그. probe.html에 결정론(A===B) 검증 추가.
-- v1.4 (07-12): 🏅 오늘의 도전 랭킹 수합기 `teacher-ranking.html`(교사용, 별도 파일) — 학생 결과 복사 텍스트 붙여넣기→파싱→최고점 순위표+필터+TSV 복사. probe-ranking으로 검증(임시, 삭제됨).
-- v1.5 (07-16): 👻 고스트 레이스(직전 판 점수 곡선과 실시간 비교, codedrop_last.curve) + 📌 오답 리포트(스니펫별 오타·놓침 TOP 3 + snippets.js `exp` 한 줄 해설 — 전 100문항 작성). probe에 3검증 추가, DONE 완주.
-- v1.8 (07-20): ⌨ 예약어 연습(단어 드릴, 사용자 지시) — 낙하 없는 **새 화면 `#screen-kw`**. 파이썬 예약어 35개를 셔플해 한 개씩 표시(`.ch` done/cursor 재사용), 정타만 다음 글자·오타는 무시(정확도 반영), 실시간 CPM·정확도·진행(n/35), 다음 6개 미리보기, 완주 시 결과(초·CPM·정확도)+다시(Enter)/홈. 타이틀 `#btn-kw` 진입, onKey에 `s==="kw"` 분기(IME 무시·Esc 홈). `KW` 모듈. 기록 저장 안 함(연습). probe에 3검증(진입·완주 1/35·오타 정확도)·DONE. ⚠️ probe는 게임오버 방치 루프 때문에 `--virtual-time-budget=400000` 필요.
-- v1.7 (07-20): 🌗 낮/밤 색 모드 토글(day/night, 사용자 지시) — 하드코딩 중립색 12종을 CSS 변수화(--border/--surface2/--warn-bg 등) + `:root[data-theme="light"]` 라이트 테마 + 타이틀 설정에 `#btn-theme` 버튼. `codedrop_settings.theme`('dark'|'light') 저장, applySettings가 `documentElement.dataset.theme` 적용. 라이트는 액센트 진하게(가독성)·primary 버튼 텍스트 흰색(--on-target). 게임 로직 무변경(CSS만) — probe 회귀 없음, 라이트 타이틀·플레이 스크린샷 확인.
-- v1.6 (07-16): 👑 보스 스니펫(레벨업 직후 1개, 느리게·×2·처치 시 화면 소거, CONFIG.boss) + 🎯 연습 모드(P키 토글, 낙하 정지·라이브 CPM·무기록 — **GAME_DESIGN §6의 "연습 모드 금지" 조항을 사용자 지시로 개정**). probe 보스·연습 3검증 추가, DONE 완주.
+핵심 루프(4난이도 낙하 타이핑) + 부가 기능:
+- **오늘의 도전**: 날짜+난이도 시드 결정론 RNG(mulberry32)로 반 전원 동일 문제 순서. 난이도 화면 C키 토글, 교사용 랭킹 수합기 `teacher-ranking.html`(별도).
+- **고스트 레이스**(직전 판 점수 곡선 실시간 비교, `codedrop_last.curve`) · **오답 리포트**(스니펫별 오타 TOP3 + snippets.js `exp` 해설).
+- **보스 스니펫**(레벨업 직후 1개, 느리게·×2, CONFIG.boss) · **연습 모드**(P키, 낙하 정지·무기록 — GAME_DESIGN §6 "연습 모드 금지"를 사용자 지시로 개정).
+- **낮/밤 테마**(`codedrop_settings.theme`, `:root[data-theme]`) · **예약어 연습**(낙하 없는 `#screen-kw`, 파이썬 예약어 35개 타자 드릴, 무기록).
 
 ## 검증
 
-- 헤드리스 iframe 프로브 (TECH_SPEC §8 시나리오 15종 기준): probe.html로 index.html을 감싸 keydown 디스패치 →
-  `msedge --headless=new --allow-file-access-from-files --virtual-time-budget=20000 --dump-dom`.
-- ⚠️ ~~rAF 정지 한계~~ → **해결(2026-07-10)**: `probe.html`이 iframe에 rAF를 setTimeout(16ms) 심으로 교체해 낙하·스폰·레벨업·위험경고·바닥판정까지 자동 검증한다. 패치 후 반드시 probe.html 실행.
+- 헤드리스 iframe 프로브(TECH_SPEC §8, 15종 기준): probe.html이 index.html을 감싸 keydown 디스패치 → `msedge --headless=new --allow-file-access-from-files --virtual-time-budget=20000 --dump-dom`. probe.html이 rAF를 setTimeout(16ms) 심으로 교체해 낙하·스폰·레벨업·위험경고까지 자동 검증. 패치 후 필수.
+- ⚠️ **예약어 연습(kw) 검증은 `--virtual-time-budget=400000` 필요**(게임오버 방치 루프 때문).
 
 ## 형제 프로젝트
 
